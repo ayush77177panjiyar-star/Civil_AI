@@ -128,37 +128,49 @@ export const CivicApiService = {
     } catch (err: any) {
       console.warn('[routeProblem Grounded Fallback]:', err?.message);
       const lower = userProblem.toLowerCase();
-      let recTool: 'rti' | 'rights' | 'scheme' | 'form' | 'document' = 'rti';
-      let directAnswer = `Here is official guidance regarding: "${userProblem}" under Indian statutory regulations.`;
+      let recTool: 'rti' | 'rights' | 'scheme' | 'form' | 'document' = 'rights';
+      let catLabel = 'Constitutional Law & Legal Rights';
+      let directAnswer = `Here is official guidance regarding: "${userProblem}" under Indian legal and statutory regulations.`;
       
-      if (lower.includes('scheme') || lower.includes('pension') || lower.includes('yojana') || lower.includes('dbt')) {
+      if (lower.includes('article 142') || lower.includes('142')) {
+        catLabel = 'Constitution of India - Article 142 (Complete Justice)';
+        recTool = 'rights';
+        directAnswer = `Article 142 of the Constitution of India empowers the Supreme Court of India to pass any decree or order necessary for doing "complete justice" in any cause or matter pending before it.\n\nOrders passed under Article 142 are enforceable throughout India and provide extraordinary jurisdiction to deliver equitable remedies.`;
+      } else if (lower.includes('article 21')) {
+        catLabel = 'Constitution of India - Article 21 (Right to Life & Liberty)';
+        recTool = 'rights';
+        directAnswer = `Article 21 guarantees that "No person shall be deprived of his life or personal liberty except according to procedure established by law." It includes Right to Privacy, Health, Dignity, and Clean Environment.`;
+      } else if (lower.includes('scheme') || lower.includes('pension') || lower.includes('yojana') || lower.includes('dbt')) {
         recTool = 'scheme';
+        catLabel = 'Government Welfare Schemes & Subsidies';
         directAnswer = `Central & State welfare schemes are accessible via myScheme.gov.in. Eligibility is evaluated based on income, residency, and category.`;
       } else if (lower.includes('consumer') || lower.includes('police') || lower.includes('rights') || lower.includes('complaint')) {
         recTool = 'rights';
+        catLabel = 'Legal Rights & Consumer Protection';
         directAnswer = `Under Consumer Protection Act 2019 and Indian statutes, grievances can be lodged on e-Daakhil or National Consumer Helpline (1915).`;
-      } else if (lower.includes('rti') || lower.includes('information')) {
+      } else if (lower.includes('rti') || lower.includes('information act')) {
         recTool = 'rti';
+        catLabel = 'Right to Information (RTI Act 2005)';
         directAnswer = `Under Section 6(1) of the RTI Act 2005, citizens can request information from any Public Authority online via rtionline.gov.in.`;
       }
 
       return {
-        category: 'Civic Service',
-        categoryLabel: 'Civic Knowledge & Guidance',
+        category: 'Legal Knowledge',
+        categoryLabel: catLabel,
         summary: userProblem,
         recommendedTool: recTool,
         confidence: 'HIGH',
-        reasoning: 'Grounded in Indian statutory framework (RTI Act 2005, Consumer Protection Act 2019, myScheme).',
+        reasoning: 'Grounded in the Constitution of India and Indian statutory framework.',
         suggestedSteps: [
-          'Identify relevant government authority or public information officer.',
-          'Review official guidelines on rtionline.gov.in or myScheme.gov.in.',
-          'Submit your application using CivicAI guidance tools.'
+          'Review constitutional provisions and legal precedents.',
+          'Consult official judicial portals (sci.gov.in) or statutory guidelines.',
+          'Use CivicAI tools if formal representation or grievance is needed.'
         ],
         officialSources: [
-          { name: 'RTI Online Portal', title: 'RTI Online Portal', url: 'https://rtionline.gov.in', sourceType: 'official' },
-          { name: 'myScheme Portal', title: 'myScheme Portal', url: 'https://myscheme.gov.in', sourceType: 'official' }
+          { name: 'Supreme Court of India', title: 'Supreme Court of India', url: 'https://main.sci.gov.in', sourceType: 'official' },
+          { name: 'National Portal of India', title: 'National Portal of India', url: 'https://india.gov.in', sourceType: 'official' }
         ],
-        disclaimer: 'CivicAI provides statutory guidance grounded in official Indian government portals.',
+        disclaimer: 'CivicAI provides statutory guidance grounded in the Constitution of India and official government portals.',
         directAnswer
       } as ProblemRoutingResult;
     }
