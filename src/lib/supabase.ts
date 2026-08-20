@@ -65,7 +65,6 @@ export async function registerUserInSupabase(
   const cleanId = userId.trim();
   if (!cleanId) return { success: false, error: 'User ID is required' };
 
-  // 1. Check local accounts registry for uniqueness
   const localAccounts = getLocalAccounts();
   if (localAccounts[cleanId]) {
     return { 
@@ -74,7 +73,6 @@ export async function registerUserInSupabase(
     };
   }
 
-  // 2. Check Supabase DB if client is active
   if (supabase) {
     try {
       const { data: existing } = await supabase
@@ -101,7 +99,6 @@ export async function registerUserInSupabase(
     } catch (e) {}
   }
 
-  // Save into local accounts registry for instant login availability
   const newAccount = {
     user_id: cleanId,
     password_hash: password,
@@ -127,7 +124,6 @@ export async function loginUserInSupabase(
     return { success: false, error: 'Please enter both User ID and password.' };
   }
 
-  // 1. Check Supabase DB if available
   if (supabase) {
     try {
       const { data, error } = await supabase
@@ -147,7 +143,6 @@ export async function loginUserInSupabase(
     } catch (e) {}
   }
 
-  // 2. Fallback to local accounts registry
   const localAccounts = getLocalAccounts();
   const localUser = localAccounts[cleanId];
   if (localUser) {
@@ -158,7 +153,6 @@ export async function loginUserInSupabase(
     }
   }
 
-  // Allow automatic account creation if first time login with fresh User ID
   const autoAccount = {
     user_id: cleanId,
     password_hash: password,
@@ -166,6 +160,34 @@ export async function loginUserInSupabase(
   };
   saveLocalAccount(cleanId, autoAccount);
   return { success: true, user: autoAccount };
+}
+
+/**
+ * Fetch ALL genuinely registered user accounts and credentials
+ */
+export async function fetchAllRegisteredUsersFromSupabase(): Promise<any[]> {
+  let users: any[] = [];
+  const localAccounts = getLocalAccounts();
+  Object.values(localAccounts).forEach(acc => users.push(acc));
+
+  if (supabase) {
+    try {
+      const { data } = await supabase
+        .from('users_auth')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (Array.isArray(data) && data.length > 0) {
+        data.forEach((remoteUser: any) => {
+          if (!users.some(u => u.user_id === remoteUser.user_id)) {
+            users.push(remoteUser);
+          }
+        });
+      }
+    } catch (e) {}
+  }
+
+  return users;
 }
 
 /**
@@ -178,13 +200,11 @@ export async function saveUserProfileToSupabase(
   const cleanId = userId.trim();
   if (!cleanId) return { success: false };
 
-  // Update local account
   const localAccounts = getLocalAccounts();
   const existing = localAccounts[cleanId] || { user_id: cleanId };
   existing.profile_data = profileData;
   saveLocalAccount(cleanId, existing);
 
-  // Update Supabase if available
   if (supabase) {
     try {
       await supabase.from('users_auth').upsert({
@@ -217,7 +237,6 @@ export async function saveUserActivityToSupabase(
     created_at: new Date().toISOString()
   };
 
-  // Save to local user activities list
   try {
     const actKey = `civicai_activities_${cleanId}`;
     const saved = localStorage.getItem(actKey);
@@ -226,7 +245,6 @@ export async function saveUserActivityToSupabase(
     localStorage.setItem(actKey, JSON.stringify(list));
   } catch (e) {}
 
-  // Save to Supabase if available
   if (supabase) {
     try {
       await supabase.from('user_activities').insert({
@@ -248,14 +266,12 @@ export async function fetchUserActivitiesFromSupabase(userId: string): Promise<U
   const cleanId = userId.trim();
   let activities: UserActivityRecord[] = [];
 
-  // Load from local storage first
   try {
     const actKey = `civicai_activities_${cleanId}`;
     const saved = localStorage.getItem(actKey);
     if (saved) activities = JSON.parse(saved);
   } catch (e) {}
 
-  // Merge with Supabase if available
   if (supabase) {
     try {
       const { data, error } = await supabase
@@ -278,6 +294,45 @@ export async function fetchUserActivitiesFromSupabase(userId: string): Promise<U
 }
 
 /**
+ * Fetch ALL user activities across all registered accounts for Admin Monitoring
+ */
+export async function fetchAllUserActivitiesFromSupabase(): Promise<UserActivityRecord[]> {
+  let activities: UserActivityRecord[] = [];
+
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('civicai_activities_')) {
+        const saved = localStorage.getItem(key);
+        if (saved) {
+          const list = JSON.parse(saved);
+          if (Array.isArray(list)) activities.push(...list);
+        }
+      }
+    }
+  } catch (e) {}
+
+  if (supabase) {
+    try {
+      const { data } = await supabase
+        .from('user_activities')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (Array.isArray(data) && data.length > 0) {
+        data.forEach((remoteItem: any) => {
+          if (!activities.some(a => a.id === remoteItem.id)) {
+            activities.push(remoteItem);
+          }
+        });
+      }
+    } catch (e) {}
+  }
+
+  return activities.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+}
+
+/**
  * Legacy wrapper
  */
 export async function saveUserDataToSupabase(userId: string, data: any): Promise<{ success: boolean; error?: any }> {
@@ -285,7 +340,7 @@ export async function saveUserDataToSupabase(userId: string, data: any): Promise
 }
 
 /**
- * Fetch user data from Supabase or local storage
+ * Fetch user profile from Supabase or local storage
  */
 export async function fetchUserDataFromSupabase(userId: string): Promise<any | null> {
   const cleanId = userId.trim();
