@@ -1,4 +1,4 @@
-import { VERIFIED_SCHEMES_DATABASE } from '../data/groundedSchemes.js';
+import { VERIFIED_SCHEMES_DATABASE } from '../data/groundedSchemes';
 
 export interface SchemeSyncResult {
   success: boolean;

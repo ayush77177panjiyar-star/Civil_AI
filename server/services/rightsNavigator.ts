@@ -1,7 +1,7 @@
 import { Type } from '@google/genai';
-import { getGenAI, getGeminiModel, withRetry, safeParseJson } from '../geminiClient.js';
-import { OFFICIAL_PORTALS } from '../data/officialSources.js';
-import { getTargetLanguageInstruction, normalizeLanguageCode, getLanguageName, getNativeLanguageName } from '../utils/languageHelper.js';
+import { getGenAI, getGeminiModel, withRetry, safeParseJson } from '../geminiClient';
+import { OFFICIAL_PORTALS } from '../data/officialSources';
+import { getTargetLanguageInstruction, normalizeLanguageCode, getLanguageName, getNativeLanguageName } from '../utils/languageHelper';
 
 export interface RightsAnalysisInput {
   userProblem: string;

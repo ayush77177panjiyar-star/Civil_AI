@@ -1,7 +1,7 @@
-import { VERIFIED_SCHEMES_DATABASE } from '../data/groundedSchemes.js';
-import { getGenAI, getGeminiModel, withRetry, safeParseJson } from '../geminiClient.js';
-import { SchemeItem, SchemeMatchResult, SchemeEvaluationResponse, ConfidenceLevel } from '../../src/types.js';
-import { getTargetLanguageInstruction, normalizeLanguageCode } from '../utils/languageHelper.js';
+import { VERIFIED_SCHEMES_DATABASE } from '../data/groundedSchemes';
+import { getGenAI, getGeminiModel, withRetry, safeParseJson } from '../geminiClient';
+import { SchemeItem, SchemeMatchResult, SchemeEvaluationResponse, ConfidenceLevel } from '../../src/types';
+import { getTargetLanguageInstruction, normalizeLanguageCode } from '../utils/languageHelper';
 import { Type } from '@google/genai';
 
 export interface CitizenProfileInput {

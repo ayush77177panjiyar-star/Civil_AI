@@ -1,6 +1,6 @@
 import { Type } from '@google/genai';
-import { getGenAI, getGeminiModel, withRetry, safeParseJson } from '../geminiClient.js';
-import { getTargetLanguageInstruction, normalizeLanguageCode, getLanguageName, getNativeLanguageName } from '../utils/languageHelper.js';
+import { getGenAI, getGeminiModel, withRetry, safeParseJson } from '../geminiClient';
+import { getTargetLanguageInstruction, normalizeLanguageCode, getLanguageName, getNativeLanguageName } from '../utils/languageHelper';
 
 export interface DocumentInterpretInput {
   textContent?: string;

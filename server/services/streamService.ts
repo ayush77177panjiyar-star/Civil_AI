@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { getGenAI, getGeminiModel } from '../geminiClient.js';
+import { getGenAI, getGeminiModel } from '../geminiClient';
 
 export interface StreamRequestOptions {
   prompt: string;

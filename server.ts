@@ -3,16 +3,18 @@ import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 
-import { routeCivicProblem } from './server/services/aiRouter.js';
-import { analyzeRtiObjective, generateRtiDraft } from './server/services/rtiAgent.js';
-import { analyzeRightsAndEscalation } from './server/services/rightsNavigator.js';
-import { evaluateSchemeEligibility } from './server/services/schemeEligibility.js';
-import { syncVerifiedSchemesToDatabase } from './server/services/schemeSyncService.js';
-import { processFormStep, generateFormalApplication } from './server/services/formFiller.js';
-import { interpretGovernmentDocument } from './server/services/documentInterpreter.js';
-import { handleGeminiStream } from './server/services/streamService.js';
-import { mapGeminiError, generateRequestId, testGeminiHealth, getGeminiModel } from './server/geminiClient.js';
-import { contextManager } from './server/contextManager.js';
+import { routeCivicProblem } from './server/services/aiRouter';
+import { analyzeRtiObjective, generateRtiDraft } from './server/services/rtiAgent';
+import { analyzeRightsAndEscalation } from './server/services/rightsNavigator';
+import { evaluateSchemeEligibility } from './server/services/schemeEligibility';
+import { syncVerifiedSchemesToDatabase } from './server/services/schemeSyncService';
+import { processFormStep, generateFormalApplication } from './server/services/formFiller';
+import { interpretGovernmentDocument } from './server/services/documentInterpreter';
+import { handleGeminiStream } from './server/services/streamService';
+import { mapGeminiError, generateRequestId, testGeminiHealth, getGeminiModel } from './server/geminiClient';
+import { contextManager } from './server/contextManager';
+import { registerUserInSupabase, loginUserInSupabase } from './src/lib/supabase';
+import { getExamplesForTool, getLocalizedExampleText } from './src/data/civicExamples';
 
 dotenv.config();
 
@@ -524,12 +526,6 @@ export async function createApp() {
       const { tool = 'rti', language = 'en' } = req.body;
       adminStats.exampleQueriesServed++;
 
-      // We can generate a high quality localized example via predefined templates or fallback
-      const { getExamplesForTool, getLocalizedExampleText } = await import('./src/data/civicExamples.js').catch(() => ({
-        getExamplesForTool: () => [],
-        getLocalizedExampleText: () => ({ title: 'Sample Case', description: 'Sample civic problem' })
-      }));
-
       const examples = getExamplesForTool(tool);
       const randomBase = examples[Math.floor(Math.random() * examples.length)] || examples[0];
 
@@ -597,7 +593,6 @@ export async function createApp() {
     }
 
     try {
-      const { registerUserInSupabase } = await import('./src/lib/supabase.js');
       const result = await registerUserInSupabase(cleanId, password, email, fullName);
       if (!result.success) {
         return res.status(400).json({
@@ -625,7 +620,6 @@ export async function createApp() {
     }
 
     try {
-      const { loginUserInSupabase } = await import('./src/lib/supabase.js');
       const result = await loginUserInSupabase(cleanId, password);
       if (!result.success) {
         return res.status(401).json({

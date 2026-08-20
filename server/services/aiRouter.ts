@@ -1,9 +1,9 @@
 import { Type } from '@google/genai';
-import { getGenAI, getGeminiModel, withRetry, safeParseJson } from '../geminiClient.js';
-import { OFFICIAL_PORTALS } from '../data/officialSources.js';
-import { serverCache } from '../cache.js';
-import { getTargetLanguageInstruction, normalizeLanguageCode, getLanguageName, getNativeLanguageName } from '../utils/languageHelper.js';
-import { contextManager } from '../contextManager.js';
+import { getGenAI, getGeminiModel, withRetry, safeParseJson } from '../geminiClient';
+import { OFFICIAL_PORTALS } from '../data/officialSources';
+import { serverCache } from '../cache';
+import { getTargetLanguageInstruction, normalizeLanguageCode, getLanguageName, getNativeLanguageName } from '../utils/languageHelper';
+import { contextManager } from '../contextManager';
 
 export type IntentType = 
   | 'INFORMATION'
