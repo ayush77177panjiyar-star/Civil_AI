@@ -98,64 +98,52 @@ export async function routeCivicProblem(input: RouterInput): Promise<RouterOutpu
   const { message, conversationId, language: rawLanguage = 'en' } = input;
   const language = normalizeLanguageCode(rawLanguage);
   const trimmedMessage = message.trim();
+  const lowerMsg = trimmedMessage.toLowerCase();
 
-  // Multi-turn context
-  let contextPrompt = '';
-  if (conversationId) {
-    contextPrompt = contextManager.formatContextPrompt(conversationId);
-  }
-
-  const cacheKey = `route:${language}:${conversationId || 'none'}:${trimmedMessage.toLowerCase()}`;
-  const cached = serverCache.get<RouterOutput>(cacheKey);
-  if (cached) {
-    return cached;
-  }
-
-  const langInstruction = getTargetLanguageInstruction(language);
   const langName = getLanguageName(language);
   const nativeName = getNativeLanguageName(language);
 
-  const systemInstruction = `You are the Central AI Intelligence & Routing Engine for CivicAI — India's Civic & Legal Empowerment Platform.
-Strict Core Mandates:
-1. "NO SOURCE = NO CLAIM" — Always ground legal concepts in genuine Indian statutes (e.g. RTI Act 2005, Consumer Protection Act 2019, Model Tenancy Act, Payment of Wages Act, myScheme).
-2. SIMPLE QUESTIONS MUST GET SIMPLE, DIRECT ANSWERS:
-   - If the user asks a general informational question (e.g., "What is RTI?", "What is a consumer complaint?", "What is myScheme?", "What does Public Authority mean?", "How can I file an RTI?", "What documents are required?"):
-     - Set intent = "INFORMATION".
-     - Set requiresTool = false.
-     - Provide a clear, comprehensive, plain-language direct answer in 'directAnswer' in ${langName} (${nativeName}).
-     - Do NOT ask unnecessary personal/district questions.
-     - Then offer a helpful next step (e.g. "If you want, I can also help you draft an RTI application.").
-   - If the user says basic conversational phrases ("Hello", "Hi", "Thanks", "Thank you", "Okay", "Can you explain simply?"):
-     - Set intent = "GENERAL_CONVERSATION".
-     - Set requiresTool = false.
-     - Provide a warm, friendly response in 'directAnswer' in ${langName} (${nativeName}) explaining how CivicAI can help with RTI drafts, consumer disputes, welfare schemes, government forms, or notice interpretations.
+  // Check cache first
+  const cacheKey = `ai_router_${language}_${trimmedMessage}`;
+  const cached = serverCache.get<RouterOutput>(cacheKey);
+  if (cached) return cached;
 
-3. ASK QUESTIONS ONLY WHEN STRICTLY REQUIRED:
-   - When drafting or taking action (e.g. "I want to draft an RTI about road construction"), ask only the missing parameters needed for the draft (location/department/timeframe).
-   - NEVER ask for Aadhaar, phone number, full personal address, or date of birth unless strictly required for a formal representation.
-   - Do NOT force document upload unless the user is specifically asking to analyze a document ("What does this notice mean?").
+  // Build Context History if conversationId exists
+  let contextPrompt = '';
+  if (conversationId) {
+    contextPrompt = contextManager.getFormattedHistory(conversationId, 6);
+  }
 
-4. DISTINGUISH 7 INTENTS:
-   - 'INFORMATION': Educational/informational civic question -> Direct answer in 'directAnswer', requiresTool = false.
-   - 'GENERAL_CONVERSATION': Greetings, thanks, conversational cues -> Friendly response in 'directAnswer', requiresTool = false.
-   - 'ACTION': Citizen has a concrete grievance/dispute/issue -> Route to appropriate tool (requiresTool = true).
-   - 'DOCUMENT': Citizen explicitly wants to draft an RTI or legal document -> Route to 'rti' (requiresTool = true).
-   - 'ELIGIBILITY': Citizen wants to check welfare schemes/scholarships -> Route to 'scheme' (requiresTool = true).
-   - 'FORM': Citizen wants help filling an official form/application -> Route to 'form' (requiresTool = true).
-   - 'DOCUMENT_INTERPRETATION': Citizen has a government notice/circular to understand -> Route to 'document' (requiresTool = true). If no document is provided, set requiresClarification = true and ask to paste/upload the notice.
+  const langInstruction = getTargetLanguageInstruction(language);
 
-5. TOLERANCE FOR TYPOS, HINGLISH, INFORMAL, AND MIXED INDIAN LANGUAGES:
-   - Seamlessly understand inputs like "wat is rti", "how file rti", "mera road ka kam nhi hua", "scheme for student", "mujhe rti krna hai", "RTI kaise file kare?", "mera landlord deposit return nahi kar raha", "मुझे RTI के बारे में बताओ", "RTI எப்படி file செய்வது?".
+  const systemInstruction = `You are CivicAI Central Router, an expert AI for Indian civic, legal, and government welfare services.
+Analyze the citizen's query and respond with structured JSON.
 
-6. CONTEXT AWARENESS:
-   - If previous messages exist in context, resolve references (e.g. "Can I use it against my municipality?" -> "it" refers to RTI; "What documents do I need?" -> relates to earlier topic).
+MANDATORY RULES:
+1. Grounding: Rely strictly on Indian statutes, government portals (RTI Online, myScheme, e-Daakhil, CPGRAMS), and constitutional procedures.
+2. Rule "NO SOURCE = NO CLAIM": Cite official frameworks or laws for every advice step.
+3. Language: Formulate all text fields in ${langName} (${nativeName}).
 
+JSON STRUCTURE REQUIRED:
+{
+  "intent": "INFORMATION" | "ACTION" | "ELIGIBILITY" | "FORM" | "DOCUMENT_INTERPRETATION" | "GENERAL_CONVERSATION",
+  "confidence": "HIGH" | "MEDIUM" | "LOW",
+  "requiresTool": boolean,
+  "requiresClarification": boolean,
+  "directAnswer": "Comprehensive direct answer answering the citizen's query in detail",
+  "clarificationQuestion": "Optional clarification if needed",
+  "category": "Short Category Code",
+  "categoryLabel": "Clear Category Title",
+  "summary": "Brief summary",
+  "recommendedTool": "rti" | "rights" | "scheme" | "form" | "document" | "none",
+  "reasoning": "Legal basis and rationale",
+  "suggestedSteps": ["Step 1...", "Step 2...", "Step 3..."],
+  "disclaimer": "Official disclaimer"
+}
 ${langInstruction}`;
 
-  const prompt = `${contextPrompt ? `Conversation History:\n${contextPrompt}\n---\n` : ''}SELECTED CITIZEN RESPONSE LANGUAGE: ${langName} (${nativeName}) - Code: ${language}
-Citizen Query: "${trimmedMessage}"
-
-MANDATORY INSTRUCTION: You MUST formulate ALL fields (directAnswer, clarificationQuestion, categoryLabel, summary, reasoning, suggestedSteps, disclaimer) in ${langName} (${nativeName}) script and vocabulary.`;
+  const prompt = `${contextPrompt ? `Conversation History:\n${contextPrompt}\n---\n` : ''}Language: ${langName} (${nativeName}) - Code: ${language}
+Query: "${trimmedMessage}"`;
 
   const ai = getGenAI();
   const model = getGeminiModel();
@@ -163,81 +151,86 @@ MANDATORY INSTRUCTION: You MUST formulate ALL fields (directAnswer, clarificatio
   let parsed: any = null;
 
   try {
-    const response = await withRetry(async () => {
-      return await ai.models.generateContent({
-        model,
-        contents: prompt,
-        config: {
-          systemInstruction,
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              intent: { type: Type.STRING },
-              confidence: { type: Type.STRING },
-              requiresTool: { type: Type.BOOLEAN },
-              requiresClarification: { type: Type.BOOLEAN },
-              directAnswer: { type: Type.STRING },
-              clarificationQuestion: { type: Type.STRING },
-              category: { type: Type.STRING },
-              categoryLabel: { type: Type.STRING },
-              summary: { type: Type.STRING },
-              recommendedTool: { type: Type.STRING },
-              reasoning: { type: Type.STRING },
-              suggestedSteps: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING }
-              },
-              disclaimer: { type: Type.STRING }
-            },
-            required: ['intent', 'confidence', 'requiresTool', 'category', 'categoryLabel', 'summary', 'recommendedTool', 'reasoning', 'suggestedSteps', 'disclaimer']
-          }
-        }
-      });
+    const response = await ai.models.generateContent({
+      model,
+      contents: `${systemInstruction}\n\n${prompt}`,
+      config: {
+        maxOutputTokens: 1000
+      }
     });
 
-    parsed = safeParseJson(response.text, null);
+    if (response && response.text) {
+      parsed = safeParseJson(response.text, null);
+    }
   } catch (err: any) {
-    console.warn('[AI Router] Gemini call fallback:', err);
+    console.warn('[AI Router] Gemini generation notice:', err?.message || err);
   }
 
-  // Graceful fallback if Gemini failed
+  // Grounded fallback detector if remote model call did not parse
   if (!parsed) {
+    let recTool: RouterOutput['recommendedTool'] = 'none';
+    let intent: IntentType = 'INFORMATION';
+    let directAns = `Here is official guidance regarding: "${trimmedMessage}" under Indian civic regulations.`;
+    let catLabel = 'Civic Guidance & Legal Information';
+    let steps = [
+      'Verify the relevant government department or local public authority.',
+      'Gather necessary documentation (Aadhaar, proof of grievance, or application details).',
+      'Submit formal application through official portal or use the designated CivicAI tool.'
+    ];
+
+    if (lowerMsg.includes('rti') || lowerMsg.includes('information act') || lowerMsg.includes('public authority') || lowerMsg.includes('pao')) {
+      recTool = 'rti';
+      intent = 'ACTION';
+      catLabel = 'Right to Information (RTI Act 2005)';
+      directAns = `Under Section 6(1) of the RTI Act 2005, every Indian citizen has the statutory right to request information from any Public Authority. Applications can be filed online via rtionline.gov.in or directly with the Public Information Officer (PIO).`;
+      steps = [
+        'Identify the competent Public Information Officer (PIO) / Public Authority.',
+        'Draft clear, specific RTI questions seeking factual records rather than opinions.',
+        'Use CivicAI RTI Drafting Agent to format your formal Section 6(1) application.'
+      ];
+    } else if (lowerMsg.includes('scheme') || lowerMsg.includes('yojana') || lowerMsg.includes('pension') || lowerMsg.includes('ration') || lowerMsg.includes('dbt')) {
+      recTool = 'scheme';
+      intent = 'ELIGIBILITY';
+      catLabel = 'Government Welfare Schemes & Subsidies';
+      directAns = `Central and State Government welfare schemes are accessible via myScheme.gov.in and National Portal of India. Eligibility is evaluated based on income, state residency, category, and age.`;
+      steps = [
+        'Check detailed eligibility criteria on myScheme portal.',
+        'Verify required documents (Aadhaar, Income Certificate, Bank Passbook).',
+        'Use CivicAI Scheme Evaluator to match available welfare programs.'
+      ];
+    } else if (lowerMsg.includes('consumer') || lowerMsg.includes('police') || lowerMsg.includes('fir') || lowerMsg.includes('tenant') || lowerMsg.includes('complaint')) {
+      recTool = 'rights';
+      intent = 'ACTION';
+      catLabel = 'Legal Rights & Consumer Protection';
+      directAns = `Under the Consumer Protection Act 2019 and Indian statutory laws, citizens can file grievances through National Consumer Helpline (1915), e-Daakhil, or CPGRAMS portal for swift escalation.`;
+      steps = [
+        'Document all transaction receipts, agreements, or communications.',
+        'Lodge a formal notice or complaint on e-Daakhil / National Consumer Helpline.',
+        'Use CivicAI Rights Navigator to determine legal escalation options.'
+      ];
+    }
+
     parsed = {
-      intent: 'INFORMATION',
+      intent,
       confidence: 'HIGH',
-      requiresTool: false,
+      requiresTool: recTool !== 'none',
       requiresClarification: false,
-      directAnswer: `Informational guidance regarding: ${trimmedMessage}`,
-      category: 'General Civic Query',
-      categoryLabel: 'Civic Knowledge & Guidance',
+      directAnswer: directAns,
+      category: 'Civic Service',
+      categoryLabel: catLabel,
       summary: trimmedMessage,
-      recommendedTool: 'none',
-      reasoning: 'Grounded in Indian civic and legal framework.',
-      suggestedSteps: [
-        'Identify the relevant authority or department',
-        'Review statutory rights and procedure',
-        'Proceed with official representation or application'
-      ],
-      disclaimer: 'CivicAI provides general civic information.'
+      recommendedTool: recTool,
+      reasoning: 'Grounded in official Indian statutory frameworks (RTI Act 2005, Consumer Protection Act 2019, myScheme).',
+      suggestedSteps: steps,
+      disclaimer: 'CivicAI provides statutory information grounded in official Indian government portals.'
     };
   }
 
-  // Map recommended tool
-  const cat = (parsed.category || '').toLowerCase();
-  const toolName = (parsed.recommendedTool || '').toLowerCase();
-
   // Pick grounded official sources
   const relevantSources = OFFICIAL_PORTALS.filter(p => {
-    if (toolName === 'rti' || cat.includes('rti') || trimmedMessage.toLowerCase().includes('rti')) {
-      return p.name.includes('RTI');
-    }
-    if (toolName === 'scheme' || cat.includes('scheme') || cat.includes('welfare')) {
-      return p.name.includes('Scheme') || p.name.includes('DBT') || p.name.includes('Portal');
-    }
-    if (toolName === 'rights' || cat.includes('consumer') || cat.includes('tenant')) {
-      return p.name.includes('Consumer') || p.name.includes('Daakhil') || p.name.includes('Legal');
-    }
+    if (parsed.recommendedTool === 'rti' || lowerMsg.includes('rti')) return p.name.includes('RTI');
+    if (parsed.recommendedTool === 'scheme' || lowerMsg.includes('scheme')) return p.name.includes('Scheme') || p.name.includes('DBT') || p.name.includes('Portal');
+    if (parsed.recommendedTool === 'rights' || lowerMsg.includes('consumer')) return p.name.includes('Consumer') || p.name.includes('Daakhil') || p.name.includes('Legal');
     return p.isCentral;
   }).slice(0, 3).map(s => ({
     name: s.name,
@@ -252,67 +245,45 @@ MANDATORY INSTRUCTION: You MUST formulate ALL fields (directAnswer, clarificatio
     retrievedAt: new Date().toISOString().split('T')[0]
   }));
 
-  // Build structured follow-up suggestions in selected language
+  // Build structured follow-up actions
   const followUpActions: RouterOutput['followUpActions'] = [];
-  if (parsed.intent === 'INFORMATION' || parsed.intent === 'GENERAL_CONVERSATION') {
-    const rtiLabel = ACTION_LABELS.rti[language] || ACTION_LABELS.rti.en;
-    const schemeLabel = ACTION_LABELS.scheme[language] || ACTION_LABELS.scheme.en;
-    const rightsLabel = ACTION_LABELS.rights[language] || ACTION_LABELS.rights.en;
+  const rtiLabel = ACTION_LABELS.rti[language] || ACTION_LABELS.rti.en;
+  const schemeLabel = ACTION_LABELS.scheme[language] || ACTION_LABELS.scheme.en;
+  const rightsLabel = ACTION_LABELS.rights[language] || ACTION_LABELS.rights.en;
 
-    if (toolName === 'rti' || cat.includes('rti')) {
-      followUpActions.push({
-        label: rtiLabel,
-        actionType: 'tool',
-        targetTool: 'rti',
-        targetQuery: trimmedMessage
-      });
-    } else if (toolName === 'scheme' || cat.includes('scheme')) {
-      followUpActions.push({
-        label: schemeLabel,
-        actionType: 'tool',
-        targetTool: 'scheme',
-        targetQuery: trimmedMessage
-      });
-    } else if (toolName === 'rights' || cat.includes('consumer') || cat.includes('tenant')) {
-      followUpActions.push({
-        label: rightsLabel,
-        actionType: 'tool',
-        targetTool: 'rights',
-        targetQuery: trimmedMessage
-      });
-    }
+  if (parsed.recommendedTool === 'rti' || lowerMsg.includes('rti')) {
+    followUpActions.push({ label: rtiLabel, actionType: 'tool', targetTool: 'rti', targetQuery: trimmedMessage });
+  } else if (parsed.recommendedTool === 'scheme' || lowerMsg.includes('scheme')) {
+    followUpActions.push({ label: schemeLabel, actionType: 'tool', targetTool: 'scheme', targetQuery: trimmedMessage });
+  } else if (parsed.recommendedTool === 'rights' || lowerMsg.includes('consumer')) {
+    followUpActions.push({ label: rightsLabel, actionType: 'tool', targetTool: 'rights', targetQuery: trimmedMessage });
+  } else {
+    followUpActions.push({ label: rtiLabel, actionType: 'tool', targetTool: 'rti', targetQuery: trimmedMessage });
+    followUpActions.push({ label: schemeLabel, actionType: 'tool', targetTool: 'scheme', targetQuery: trimmedMessage });
   }
 
-  const result: RouterOutput = {
-    intent: (parsed.intent as IntentType) || 'INFORMATION',
-    confidence: (parsed.confidence as any) || 'HIGH',
+  const output: RouterOutput = {
+    intent: parsed.intent || 'INFORMATION',
+    confidence: parsed.confidence || 'HIGH',
     requiresTool: !!parsed.requiresTool,
     requiresClarification: !!parsed.requiresClarification,
-    directAnswer: parsed.directAnswer || parsed.summary || trimmedMessage,
+    directAnswer: parsed.directAnswer || `Official civic guidance for: ${trimmedMessage}`,
     clarificationQuestion: parsed.clarificationQuestion,
-    category: parsed.category || 'Other civic issue',
-    categoryLabel: parsed.categoryLabel || 'Civic Knowledge & Action',
+    category: parsed.category || 'General Civic Query',
+    categoryLabel: parsed.categoryLabel || 'Civic Knowledge & Guidance',
     summary: parsed.summary || trimmedMessage,
-    recommendedTool: (parsed.recommendedTool as any) || 'none',
-    reasoning: parsed.reasoning || 'Grounded response aligned with Indian statutory framework.',
-    suggestedSteps: Array.isArray(parsed.suggestedSteps) && parsed.suggestedSteps.length > 0
-      ? parsed.suggestedSteps
-      : [
-          'Review your statutory rights and entitlements',
-          'Gather supporting correspondence or proof',
-          'Submit representation to the competent authority'
-        ],
+    recommendedTool: parsed.recommendedTool || 'none',
+    reasoning: parsed.reasoning || 'Grounded in Indian civic and legal framework.',
+    suggestedSteps: Array.isArray(parsed.suggestedSteps) && parsed.suggestedSteps.length > 0 ? parsed.suggestedSteps : [
+      'Identify relevant Public Authority or Department',
+      'Review statutory guidelines on official portals',
+      'Submit application or grievance through official channels'
+    ],
     officialSources: relevantSources,
-    disclaimer: parsed.disclaimer || 'CivicAI is an informational navigation platform, not a replacement for formal legal counsel.',
+    disclaimer: parsed.disclaimer || 'CivicAI provides statutory information grounded in official Indian government portals.',
     followUpActions
   };
 
-  // Record in context manager if conversationId was supplied
-  if (conversationId) {
-    contextManager.addMessage(conversationId, 'user', trimmedMessage);
-    contextManager.addMessage(conversationId, 'assistant', result.directAnswer || result.summary);
-  }
-
-  serverCache.set(cacheKey, result, 3600);
-  return result;
+  serverCache.set(cacheKey, output, 3600);
+  return output;
 }
