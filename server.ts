@@ -574,10 +574,80 @@ export async function createApp() {
     res.json({ success: true });
   });
 
-  // 8C. USER DATA API
-  // The browser already persists the authoritative profile to Supabase/localStorage.
-  // These endpoints provide a safe API contract for sync/clear operations and prevent
-  // Vercel from returning a misleading 404 for existing frontend calls.
+  // 8C. CENTRALIZED USER AUTHENTICATION API
+  app.post('/api/auth/register', async (req, res) => {
+    const { userId, password, email = '', fullName = '' } = req.body || {};
+    const cleanId = String(userId || '').trim();
+    if (!cleanId || !password) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'User ID and password are required' }
+      });
+    }
+
+    try {
+      const { registerUserInSupabase } = await import('./src/lib/supabase.js');
+      const result = await registerUserInSupabase(cleanId, password, email, fullName);
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'DUPLICATE_USER_ID', message: result.error || 'This User ID already exists. Please choose a different User ID or login.' }
+        });
+      }
+      res.json({ success: true, userId: cleanId });
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        error: { code: 'SERVER_ERROR', message: err?.message || 'Failed to register user' }
+      });
+    }
+  });
+
+  app.post('/api/auth/login', async (req, res) => {
+    const { userId, password } = req.body || {};
+    const cleanId = String(userId || '').trim();
+    if (!cleanId || !password) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'User ID and password are required' }
+      });
+    }
+
+    try {
+      const { loginUserInSupabase } = await import('./src/lib/supabase.js');
+      const result = await loginUserInSupabase(cleanId, password);
+      if (!result.success) {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'AUTH_FAILED', message: result.error || 'Invalid User ID or password. Please check your credentials.' }
+        });
+      }
+      res.json({ success: true, userId: cleanId, user: result.user });
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        error: { code: 'SERVER_ERROR', message: err?.message || 'Login failed' }
+      });
+    }
+  });
+
+  // 8D. AUTHENTICATED ADMIN LOGIN (Footer Restricted)
+  app.post('/api/admin/login', (req, res) => {
+    const { email, password } = req.body || {};
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    const cleanPassword = String(password || '').trim();
+
+    if (cleanEmail === 'ayush77177panjiyar@gmail.com' && cleanPassword === 'Ayush@13579') {
+      return res.json({ success: true, token: 'ADMIN_SECURE_TOKEN' });
+    } else {
+      return res.status(401).json({
+        success: false,
+        error: { code: 'INVALID_CREDENTIALS', message: 'You entered wrong email and password' }
+      });
+    }
+  });
+
+  // 8E. USER DATA API
   app.post('/api/user/data', (req, res) => {
     const userId = String(req.headers['x-user-id'] || '').trim();
     if (!userId) {

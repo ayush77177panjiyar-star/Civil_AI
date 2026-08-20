@@ -1,8 +1,8 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { useUserData } from '../context/UserContext';
-import { User, ShieldCheck, Trash2, CheckCircle2 } from 'lucide-react';
+import { User, Trash2, CheckCircle2, LogIn, UserPlus } from 'lucide-react';
 import { Language } from '../types';
-import { t } from '../lib/i18n';
+import { AuthModal } from './AuthModal';
 
 interface DataModeBannerProps {
   language: Language;
@@ -11,6 +11,8 @@ interface DataModeBannerProps {
 export const DataModeBanner: React.FC<DataModeBannerProps> = ({ language }) => {
   const { userId, clearUserData } = useUserData();
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('register');
   const [notification, setNotification] = useState<string | null>(null);
 
   const triggerNotification = (msg: string) => {
@@ -38,13 +40,29 @@ export const DataModeBanner: React.FC<DataModeBannerProps> = ({ language }) => {
 
             <p className="text-[11px] hidden sm:inline font-medium">
               <span className="text-emerald-100">
-                User Account: <code className="text-[10px] font-mono bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-700 text-emerald-300">{userId.slice(0, 14)}...</code> • Clean initial experience. Click <strong>Show Example</strong> in any tool for temporary guidance.
+                User Account:{' '}
+                <button
+                  onClick={() => { setAuthMode('login'); setShowAuthModal(true); }}
+                  className="font-mono text-[10px] bg-emerald-950/80 hover:bg-emerald-950 px-2 py-0.5 rounded border border-emerald-600 text-emerald-300 hover:text-white font-bold transition-all underline decoration-dashed"
+                  title="Click to sign in with your custom User ID & Password"
+                >
+                  {userId}
+                </button>{' '}
+                • Clean initial experience. Click <strong>Show Example</strong> in any tool for temporary guidance.
               </span>
             </p>
           </div>
 
           {/* Action Controls */}
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setAuthMode('register'); setShowAuthModal(true); }}
+              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-semibold text-emerald-100 bg-emerald-800/80 border border-emerald-600 hover:bg-emerald-700 transition-colors"
+            >
+              <UserPlus className="w-3 h-3 text-emerald-300" />
+              <span>Sign In / Create User ID</span>
+            </button>
+
             <button
               id="btn-clear-user-data"
               onClick={() => setShowClearConfirm(true)}
@@ -81,7 +99,7 @@ export const DataModeBanner: React.FC<DataModeBannerProps> = ({ language }) => {
               </div>
             </div>
             <p className="text-xs text-slate-600 leading-relaxed mb-4">
-              Are you sure you want to delete all personal drafts, profiles, and form inputs for account <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-800">{userId.slice(0, 14)}...</code>?
+              Are you sure you want to delete all personal drafts, profiles, and form inputs for account <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-800">{userId}</code>?
             </p>
             <div className="flex items-center justify-end gap-2">
               <button
@@ -100,6 +118,13 @@ export const DataModeBanner: React.FC<DataModeBannerProps> = ({ language }) => {
           </div>
         </div>
       )}
+
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        language={language}
+        initialMode={authMode}
+      />
     </>
   );
 };
