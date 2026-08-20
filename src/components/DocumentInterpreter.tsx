@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   BookOpenCheck, 
   Upload, 
@@ -33,7 +33,7 @@ export const DocumentInterpreter: React.FC<DocumentInterpreterProps> = ({
   language,
   initialQuery = ''
 }) => {
-  const { userData, updateUserData } = useUserData();
+  const { userData, updateUserData, recordActivity } = useUserData();
 
   // Rule 1 & 7: Starts 100% empty for the real user
   const [docText, setDocText] = useState(userData.document.docText || '');
@@ -86,6 +86,13 @@ export const DocumentInterpreter: React.FC<DocumentInterpreterProps> = ({
       });
       setResult(data);
       updateUserData('document', { docText: text, docTitle: title, result: data });
+      recordActivity(
+        'document_analysis',
+        data.documentType || title || 'Document Analysis',
+        'document',
+        '📚',
+        { title, textContent: text.slice(0, 100), result: data }
+      );
     } catch (err) {
       console.error(err);
     } finally {

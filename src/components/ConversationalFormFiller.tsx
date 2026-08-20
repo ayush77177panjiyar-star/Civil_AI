@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { 
   FormInput, 
   Send, 
@@ -87,7 +87,7 @@ export const ConversationalFormFiller: React.FC<ConversationalFormFillerProps> =
   language,
   initialQuery = ''
 }) => {
-  const { userData, updateUserData } = useUserData();
+  const { userData, updateUserData, recordActivity } = useUserData();
 
   const [selectedTemplate, setSelectedTemplate] = useState<FormTemplate>(() => {
     const targetId = userData.form.selectedTemplateId || 'income-cert';
@@ -204,6 +204,13 @@ Contact: ${answers.mobileNumber || 'Aadhaar Registered Mobile'}
 
   const handleDownloadPdf = () => {
     generateGenericDocumentPdf(selectedTemplate.title, generatePreviewText(), answers.applicantName || 'Citizen');
+    recordActivity(
+      'form_application',
+      selectedTemplate.title,
+      'forms',
+      '📄',
+      { templateId: selectedTemplate.id, applicantName: answers.applicantName }
+    );
   };
 
   return (

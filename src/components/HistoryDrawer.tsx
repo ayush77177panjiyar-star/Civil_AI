@@ -2,15 +2,11 @@ import React from 'react';
 import { 
   X, 
   History, 
-  FileText, 
-  Scale, 
-  Award, 
-  BookOpenCheck, 
   Clock,
-  Trash2,
-  ExternalLink
+  Trash2
 } from 'lucide-react';
 import { Language } from '../types';
+import { useUserData } from '../context/UserContext';
 
 interface HistoryDrawerProps {
   isOpen: boolean;
@@ -25,34 +21,9 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
   language,
   onSelectTab
 }) => {
-  if (!isOpen) return null;
+  const { activities, clearActivities, userId } = useUserData();
 
-  const sampleHistory = [
-    {
-      id: 'h-1',
-      type: 'RTI Draft',
-      title: 'Village Road Sanction & Expenditure Inquiry (Bihar)',
-      date: 'Today, 10:15 AM',
-      tab: 'rti',
-      icon: '📝'
-    },
-    {
-      id: 'h-2',
-      type: 'Scheme Evaluation',
-      title: 'Student 20yo - Post-Matric & Higher Ed Scholarships',
-      date: 'Yesterday, 4:30 PM',
-      tab: 'schemes',
-      icon: '🏛️'
-    },
-    {
-      id: 'h-3',
-      type: 'Rights Analysis',
-      title: 'Consumer Grievance for Non-Delivery of ₹18,500 Appliance',
-      date: '18 Jan 2026',
-      tab: 'rights',
-      icon: '⚖️'
-    }
-  ];
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200">
@@ -69,55 +40,78 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
                 <h3 className="font-bold text-sm font-serif">
                   {language === 'hi' ? 'हाल की गतिविधियाँ एवं ड्राफ्ट' : 'Recent Activities & Saved Drafts'}
                 </h3>
-                <p className="text-[11px] text-slate-400">
-                  Local session storage
+                <p className="text-[11px] text-slate-400 font-mono truncate max-w-[180px]">
+                  User ID: {userId}
                 </p>
               </div>
             </div>
 
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-2">
+              {activities.length > 0 && (
+                <button
+                  onClick={clearActivities}
+                  title="Clear history"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800 transition-colors text-xs flex items-center gap-1"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           {/* List */}
           <div className="p-4 space-y-3 overflow-y-auto max-h-[calc(100vh-160px)]">
-            {sampleHistory.map((item) => (
-              <div
-                key={item.id}
-                onClick={() => {
-                  onSelectTab(item.tab);
-                  onClose();
-                }}
-                className="p-3.5 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 cursor-pointer transition-all flex items-start justify-between gap-3 group"
-              >
-                <div className="flex items-start gap-3">
-                  <span className="text-xl mt-0.5">{item.icon}</span>
-                  <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-0.5">
-                      {item.type}
-                    </span>
-                    <h4 className="text-xs font-bold text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-2">
-                      {item.title}
-                    </h4>
-                    <span className="flex items-center gap-1 text-[10px] text-slate-400 mt-1.5">
-                      <Clock className="w-3 h-3" />
-                      {item.date}
-                    </span>
+            {activities.length === 0 ? (
+              <div className="p-8 text-center text-slate-500">
+                <History className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                <p className="text-xs font-medium">
+                  {language === 'hi' ? 'कोई हाल की गतिविधि नहीं' : 'No recent activity records found'}
+                </p>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {language === 'hi' ? 'आपके द्वारा बनाए गए ड्राफ्ट यहाँ दिखाई देंगे' : 'Activities & generated drafts for your account will appear here securely.'}
+                </p>
+              </div>
+            ) : (
+              activities.map((item) => (
+                <div
+                  key={item.id}
+                  onClick={() => {
+                    onSelectTab(item.tab, item.payload);
+                    onClose();
+                  }}
+                  className="p-3.5 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 cursor-pointer transition-all flex items-start justify-between gap-3 group"
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="text-xl mt-0.5">{item.icon}</span>
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-0.5">
+                        {item.type}
+                      </span>
+                      <h4 className="text-xs font-bold text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-2">
+                        {item.title}
+                      </h4>
+                      <span className="flex items-center gap-1 text-[10px] text-slate-400 mt-1.5">
+                        <Clock className="w-3 h-3" />
+                        {item.date}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
         {/* Footer */}
         <div className="p-4 border-t border-slate-200 bg-slate-50 text-center">
           <p className="text-[11px] text-slate-500">
-            Privacy First: No personal data is stored on remote servers without citizen consent.
+            Privacy First: Multi-tenant RLS guarantees your activity is private to your user session.
           </p>
         </div>
 

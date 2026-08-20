@@ -7,6 +7,7 @@ import { routeCivicProblem } from './server/services/aiRouter.js';
 import { analyzeRtiObjective, generateRtiDraft } from './server/services/rtiAgent.js';
 import { analyzeRightsAndEscalation } from './server/services/rightsNavigator.js';
 import { evaluateSchemeEligibility } from './server/services/schemeEligibility.js';
+import { syncVerifiedSchemesToDatabase } from './server/services/schemeSyncService.js';
 import { processFormStep, generateFormalApplication } from './server/services/formFiller.js';
 import { interpretGovernmentDocument } from './server/services/documentInterpreter.js';
 import { handleGeminiStream } from './server/services/streamService.js';
@@ -394,6 +395,22 @@ export async function createApp() {
           message: controlled.userFriendlyMessage
         },
         requestId
+      });
+    }
+  });
+
+  // 5B. AUTOMATED GOVERNMENT SCHEMES SYNC
+  app.post('/api/civic/schemes/sync', async (req, res) => {
+    const requestId = (req.headers['x-request-id'] as string) || generateRequestId();
+    try {
+      const syncResult = await syncVerifiedSchemesToDatabase();
+      res.json({ ...syncResult, requestId });
+    } catch (err: any) {
+      console.error(`[Schemes Sync Error] [${requestId}]:`, err?.message || err);
+      res.status(500).json({ 
+        success: false, 
+        error: { code: 'SYNC_ERROR', message: err?.message || 'Failed to sync scheme database' },
+        requestId 
       });
     }
   });

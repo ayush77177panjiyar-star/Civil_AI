@@ -1,7 +1,13 @@
-﻿import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { INITIAL_DEMO_SCENARIOS, DemoScenariosPackage } from '../data/demoScenarios';
 import { CitizenProfile, RtiDraftData, RightsAnalysisResult, SchemeEvaluationResponse, DocumentInterpretationResult } from '../types';
-import { saveUserDataToSupabase, fetchUserDataFromSupabase } from '../lib/supabase';
+import { 
+  saveUserDataToSupabase, 
+  fetchUserDataFromSupabase, 
+  saveUserActivityToSupabase, 
+  fetchUserActivitiesFromSupabase,
+  UserActivityRecord 
+} from '../lib/supabase';
 
 export interface UserRtiState {
   problemQuery: string;
@@ -61,6 +67,17 @@ export interface RealUserData {
   rights: UserRightsState;
   form: UserFormState;
   document: UserDocumentState;
+}
+
+export interface ActivityItem {
+  id: string;
+  type: string;
+  activityType: 'rti_draft' | 'document_analysis' | 'scheme_check' | 'rights_analysis' | 'form_application';
+  title: string;
+  date: string;
+  tab: string;
+  icon: string;
+  payload?: any;
 }
 
 export const INITIAL_USER_DATA = (userId: string): RealUserData => ({
@@ -129,6 +146,7 @@ interface UserContextType {
   isInitialChoiceMade: boolean;
   demoData: DemoScenariosPackage;
   userData: RealUserData;
+  activities: ActivityItem[];
   setUserId: (id: string) => void;
   setDataMode: (mode: DataMode) => void;
   chooseMode: (mode: DataMode) => void;
@@ -137,6 +155,14 @@ interface UserContextType {
   resetDemo: () => void;
   clearUserData: () => Promise<void>;
   syncWithBackend: () => Promise<void>;
+  recordActivity: (
+    activityType: ActivityItem['activityType'],
+    title: string,
+    tab: string,
+    icon: string,
+    payload?: any
+  ) => Promise<void>;
+  clearActivities: () => void;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -185,6 +211,16 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return INITIAL_USER_DATA(userId);
   });
 
+  // 3. User Activities State (strictly isolated per userId)
+  const [activities, setActivities] = useState<ActivityItem[]>(() => {
+    try {
+      const actKey = `civicai_activities_${userId}`;
+      const saved = localStorage.getItem(actKey);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return [];
+  });
+
   // Persist demo state
   useEffect(() => {
     try {
@@ -194,31 +230,61 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [demoData]);
 
-  // Restore the user's saved real profile when a backend record exists.
-  // Demo data is never considered for this restore.
+  // Load activities from Supabase backend for current userId
+  useEffect(() => {
+    let cancelled = false;
+    fetchUserActivitiesFromSupabase(userId).then(remoteActs => {
+      if (cancelled || !Array.isArray(remoteActs) || remoteActs.length === 0) return;
+      const formatted: ActivityItem[] = remoteActs.map(r => ({
+        id: r.id || `act_${Date.now()}_${Math.random()}`,
+        type: r.payload?.title || r.activity_type,
+        activityType: r.activity_type as any,
+        title: r.payload?.title || 'User Activity',
+        date: r.created_at ? new Date(r.created_at).toLocaleString() : new Date().toLocaleString(),
+        tab: r.payload?.tab || 'rti',
+        icon: r.payload?.icon || '📝',
+        payload: r.payload
+      }));
+      setActivities(prev => {
+        const merged = [...formatted];
+        prev.forEach(p => {
+          if (!merged.some(m => m.id === p.id)) merged.push(p);
+        });
+        return merged;
+      });
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  // Persist activities locally per userId
+  useEffect(() => {
+    try {
+      const actKey = `civicai_activities_${userId}`;
+      localStorage.setItem(actKey, JSON.stringify(activities));
+    } catch (e) {}
+  }, [activities, userId]);
+
+  // Restore user profile from Supabase
   useEffect(() => {
     let cancelled = false;
     fetchUserDataFromSupabase(userId).then(remote => {
-      if (cancelled || !remote || remote.type !== 'user' || remote.id !== userId) return;
+      if (cancelled || !remote) return;
       setUserData(prev => ({ ...prev, ...remote, id: userId, type: 'user' }));
     }).catch(() => {});
     return () => { cancelled = true; };
   }, [userId]);
 
-  // Persist user state to localStorage and Supabase backend
+  // Persist user state to localStorage and Supabase
   useEffect(() => {
     try {
       const userKey = `civicai_user_${userId}`;
       localStorage.setItem(userKey, JSON.stringify(userData));
-
-      // Rule 4 & 13: Only real user data is saved to Supabase database
       saveUserDataToSupabase(userId, userData).catch(() => {});
     } catch (e) {
       console.warn('Failed to persist user data locally:', e);
     }
   }, [userData, userId]);
 
-  // Sync with backend API & Supabase
   const syncWithBackend = useCallback(async () => {
     try {
       await saveUserDataToSupabase(userId, userData);
@@ -230,9 +296,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         body: JSON.stringify(userData)
       }).catch(() => {});
-    } catch (e) {
-      // Non-blocking
-    }
+    } catch (e) {}
   }, [userData, userId]);
 
   const setUserId = useCallback((newId: string) => {
@@ -241,7 +305,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUserIdState(trimmed);
     localStorage.setItem(ACTIVE_USER_ID_KEY, trimmed);
 
-    // Load data for this user ID
     try {
       const userKey = `civicai_user_${trimmed}`;
       const saved = localStorage.getItem(userKey);
@@ -250,8 +313,17 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setUserData(INITIAL_USER_DATA(trimmed));
       }
+
+      const actKey = `civicai_activities_${trimmed}`;
+      const savedActs = localStorage.getItem(actKey);
+      if (savedActs) {
+        setActivities(JSON.parse(savedActs));
+      } else {
+        setActivities([]);
+      }
     } catch (e) {
       setUserData(INITIAL_USER_DATA(trimmed));
+      setActivities([]);
     }
   }, []);
 
@@ -321,13 +393,44 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {}
   }, []);
 
+  const recordActivity = useCallback(async (
+    activityType: ActivityItem['activityType'],
+    title: string,
+    tab: string,
+    icon: string,
+    payload?: any
+  ) => {
+    const newItem: ActivityItem = {
+      id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      type: title,
+      activityType,
+      title,
+      date: new Date().toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }),
+      tab,
+      icon,
+      payload
+    };
+
+    setActivities(prev => [newItem, ...prev.filter(p => p.title !== title)]);
+    saveUserActivityToSupabase(userId, activityType, { title, tab, icon, payload }).catch(() => {});
+  }, [userId]);
+
+  const clearActivities = useCallback(() => {
+    setActivities([]);
+    try {
+      localStorage.removeItem(`civicai_activities_${userId}`);
+    } catch (e) {}
+  }, [userId]);
+
   const clearUserData = useCallback(async () => {
     const empty = INITIAL_USER_DATA(userId);
     setUserData(empty);
+    setActivities([]);
     try {
       const userKey = `civicai_user_${userId}`;
       localStorage.removeItem(userKey);
       localStorage.setItem(userKey, JSON.stringify(empty));
+      localStorage.removeItem(`civicai_activities_${userId}`);
       
       await fetch('/api/user/clear', {
         method: 'POST',
@@ -349,6 +452,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isInitialChoiceMade,
         demoData,
         userData,
+        activities,
         setUserId,
         setDataMode,
         chooseMode,
@@ -356,7 +460,9 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateDemoData,
         resetDemo,
         clearUserData,
-        syncWithBackend
+        syncWithBackend,
+        recordActivity,
+        clearActivities
       }}
     >
       {children}

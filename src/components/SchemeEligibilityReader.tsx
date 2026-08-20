@@ -1,4 +1,4 @@
-﻿import { INDIAN_STATES_AND_UTS } from '../data/indianStates';
+import { INDIAN_STATES_AND_UTS } from '../data/indianStates';
 import React, { useState, useEffect } from 'react';
 import { 
   Award, 
@@ -34,7 +34,7 @@ export const SchemeEligibilityReader: React.FC<SchemeEligibilityReaderProps> = (
   language,
   initialQuery = ''
 }) => {
-  const { userData, updateUserData } = useUserData();
+  const { userData, updateUserData, recordActivity } = useUserData();
 
   // Rule 1 & 7: All profile fields start clean & empty for the real citizen
   const [profile, setProfile] = useState({
@@ -86,6 +86,16 @@ export const SchemeEligibilityReader: React.FC<SchemeEligibilityReaderProps> = (
       updateUserData('scheme', { profile: profToUse, evaluation: data });
       if (data.evaluatedSchemes && data.evaluatedSchemes.length > 0) {
         setSelectedSchemeDetail(data.evaluatedSchemes[0]);
+      }
+
+      if (profToUse.occupation || profToUse.age || profToUse.annualIncome) {
+        recordActivity(
+          'scheme_check',
+          `Scheme Check: ${profToUse.occupation || 'Citizen'} (${profToUse.stateOrUt || 'India'})`,
+          'schemes',
+          '🏛️',
+          { profile: profToUse, evaluation: data }
+        );
       }
     } catch (err) {
       console.error(err);

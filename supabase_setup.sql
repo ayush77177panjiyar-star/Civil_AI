@@ -1,65 +1,76 @@
-﻿-- ============================================================
--- CIVICAI SUPABASE DATABASE SETUP SCRIPT
--- Project ID: spkwmbxklttqkhnfamrp
--- Copy and paste this into Supabase SQL Editor (https://supabase.com/dashboard/project/spkwmbxklttqkhnfamrp/sql)
+-- ============================================================
+-- CIVICAI SUPABASE DATABASE SETUP & SECURITY MIGRATION SCRIPT
+-- Copy and paste this into your Supabase SQL Editor
+-- Fixes Cross-User Data Leak with strict Row-Level Security (RLS)
 -- ============================================================
 
--- 1. Create `user_profiles` table for storing clean user records
-CREATE TABLE IF NOT EXISTS public.user_profiles (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id TEXT NOT NULL UNIQUE,
-    data_type TEXT NOT NULL DEFAULT 'user',
-    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- 2. Create index on user_id for fast lookup
-CREATE INDEX IF NOT EXISTS idx_user_profiles_user_id ON public.user_profiles (user_id);
-
--- 3. Create `audit_logs` table for logging grounded queries (excluding example views)
-CREATE TABLE IF NOT EXISTS public.audit_logs (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id TEXT,
-    feature TEXT NOT NULL,
-    user_query TEXT NOT NULL,
-    confidence TEXT DEFAULT 'HIGH',
-    sources_cited TEXT[] DEFAULT '{}',
-    is_example BOOLEAN DEFAULT FALSE,
+-- 1. User Profiles Table
+CREATE TABLE IF NOT EXISTS public.profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    email TEXT,
+    full_name TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 4. Enable Row Level Security (RLS) & Public access policies for standard API key access
-ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
+-- 2. User Activities & History Table
+CREATE TABLE IF NOT EXISTS public.user_activities (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    activity_type TEXT NOT NULL, -- e.g., 'rti_draft', 'document_analysis', 'scheme_check', 'rights_analysis', 'form_application'
+    payload JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 
--- Allow anonymous & authenticated access on user_profiles
-CREATE POLICY "Allow public select on user_profiles" 
-    ON public.user_profiles FOR SELECT 
-    USING (true);
+-- 3. Schemes Database Table
+CREATE TABLE IF NOT EXISTS public.schemes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    scheme_name TEXT NOT NULL,
+    category TEXT,
+    eligibility_criteria JSONB,
+    benefits TEXT,
+    source_url TEXT,
+    last_synced TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 
-CREATE POLICY "Allow public insert/update on user_profiles" 
-    ON public.user_profiles FOR ALL 
-    USING (true) 
-    WITH CHECK (true);
+-- Enable Row Level Security (RLS)
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_activities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.schemes ENABLE ROW LEVEL SECURITY;
 
--- Allow public insert on audit_logs
-CREATE POLICY "Allow public insert on audit_logs" 
-    ON public.audit_logs FOR ALL 
-    USING (true) 
-    WITH CHECK (true);
+-- Drop existing policies if re-running migration to avoid conflict errors
+DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can view only their own activity" ON public.user_activities;
+DROP POLICY IF EXISTS "Users can insert their own activity" ON public.user_activities;
+DROP POLICY IF EXISTS "Users can delete their own activity" ON public.user_activities;
+DROP POLICY IF EXISTS "Public schemes read access" ON public.schemes;
 
--- 5. Auto-update timestamp trigger
-CREATE OR REPLACE FUNCTION update_modified_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+-- RLS Policies for Profiles
+CREATE POLICY "Users can view own profile" 
+ON public.profiles FOR SELECT 
+USING (auth.uid() = id);
 
-DROP TRIGGER IF EXISTS set_user_profiles_updated_at ON public.user_profiles;
-CREATE TRIGGER set_user_profiles_updated_at
-    BEFORE UPDATE ON public.user_profiles
-    FOR EACH ROW
-    EXECUTE FUNCTION update_modified_column();
+CREATE POLICY "Users can update own profile" 
+ON public.profiles FOR UPDATE 
+USING (auth.uid() = id);
+
+-- RLS Policies for User Activities (Fixes Cross-User Data Leak)
+CREATE POLICY "Users can view only their own activity" 
+ON public.user_activities FOR SELECT 
+USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own activity" 
+ON public.user_activities FOR INSERT 
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own activity" 
+ON public.user_activities FOR DELETE 
+USING (auth.uid() = user_id);
+
+-- RLS Policies for Schemes (Publicly Readable, Admin-only write)
+CREATE POLICY "Public schemes read access" 
+ON public.schemes FOR SELECT 
+USING (true);

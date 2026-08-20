@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Scale, 
   ShieldCheck, 
@@ -31,7 +31,7 @@ export const RightsNavigator: React.FC<RightsNavigatorProps> = ({
   language,
   initialQuery = ''
 }) => {
-  const { userData, updateUserData } = useUserData();
+  const { userData, updateUserData, recordActivity } = useUserData();
 
   const [problemQuery, setProblemQuery] = useState(
     initialQuery || userData.rights.problemQuery || ''
@@ -90,7 +90,14 @@ export const RightsNavigator: React.FC<RightsNavigatorProps> = ({
       });
       setResult(data);
       
-        updateUserData('rights', { problemQuery: q, contextDetails: ctx, result: data });
+      updateUserData('rights', { problemQuery: q, contextDetails: ctx, result: data });
+      recordActivity(
+        'rights_analysis',
+        data.plainLanguageSummary || data.problemCategory || q.slice(0, 45) || 'Rights & Escalation Analysis',
+        'rights',
+        '⚖️',
+        { query: q, context: ctx, result: data }
+      );
     } catch (err) {
       console.error(err);
     } finally {

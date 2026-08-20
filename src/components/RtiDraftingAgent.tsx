@@ -1,4 +1,4 @@
-﻿import { INDIAN_STATES_AND_UTS } from '../data/indianStates';
+import { INDIAN_STATES_AND_UTS } from '../data/indianStates';
 import React, { useState, useEffect } from 'react';
 import { 
   FileText, 
@@ -37,7 +37,7 @@ export const RtiDraftingAgent: React.FC<RtiDraftingAgentProps> = ({
   language,
   initialQuery = ''
 }) => {
-  const { userData, updateUserData } = useUserData();
+  const { userData, updateUserData, recordActivity } = useUserData();
 
   // All fields start empty by default for the real user
   const [problemQuery, setProblemQuery] = useState(
@@ -143,6 +143,13 @@ export const RtiDraftingAgent: React.FC<RtiDraftingAgentProps> = ({
       });
       setGeneratedDraft(draftData);
       updateUserData('rti', { generatedDraft: draftData });
+      recordActivity(
+        'rti_draft',
+        draftData.subject || problemQuery.slice(0, 45) || 'RTI Application Draft',
+        'rti',
+        '📝',
+        { query: problemQuery, draft: draftData }
+      );
     } catch (err) {
       console.error(err);
     } finally {
