@@ -66,7 +66,7 @@ Analyze and interpret this official government/legal document. ${textContent ? `
     const response = await withRetry(async () => {
       return await ai.models.generateContent({
         model,
-        contents: { parts },
+        contents: parts,
         config: {
           systemInstruction,
           responseMimeType: 'application/json',
@@ -146,44 +146,88 @@ Analyze and interpret this official government/legal document. ${textContent ? `
     console.warn('[Document Interpret Notice]:', err?.message || err);
   }
 
-  return safeParseJson(responseText, {
-    documentType: 'Official Government Notice / Order',
-    targetAudience: 'Affected Citizens / Property Owners / Applicants',
-    coreSummary: 'Official administrative communication requiring specific citizen compliance or conveying entitlements.',
-    plainLanguageMeaning: 'This document is a formal notification from a public authority specifying deadlines and procedural requirements.',
-    requiredActions: [
-      'Carefully verify the reference number and date of issuance.',
-      'Prepare certified copies of all referenced documents.',
-      'Submit written objection or compliance representation within the designated timeline.'
-    ],
-    importantDatesAndDeadlines: [
-      {
-        event: 'Filing Written Response / Compliance',
-        date: 'Within 30 days from date of receipt',
-        consequence: 'Failure to respond may lead to ex-parte administrative determinations or statutory recovery proceedings.'
+  // Smart Deterministic Parser for extracted document text fallback
+  const rawText = (textContent || '').trim();
+  let extractedDocType = 'Official Government Notice / Order';
+  let extractedRefNo = '';
+  let extractedDate = '';
+  let extractedDeadline = '';
+  let extractedSubject = '';
+  const extractedDocs: string[] = [];
+
+  if (rawText) {
+    const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length > 0 && lines[0].length < 60) {
+      extractedDocType = lines[0];
+    }
+
+    const refMatch = rawText.match(/(?:Reference\s*No|Ref\s*No|Order\s*No|No)\s*[:\-\s]\s*([A-Za-z0-9\/\-_]+)/i);
+    if (refMatch) extractedRefNo = refMatch[1];
+
+    const dateMatch = rawText.match(/(?:Date|Dated)\s*[:\-\s]\s*([0-9]{1,2}\s+[A-Za-z]+\s+[0-9]{4}|[0-9]{1,2}[\/\-][0-9]{1,2}[\/\-][0-9]{2,4})/i);
+    if (dateMatch) extractedDate = dateMatch[1];
+
+    const deadlineMatch = rawText.match(/(?:Submission\s*Deadline|Deadline|Last\s*Date)\s*[:\-\s]*\s*([0-9]{1,2}\s+[A-Za-z]+\s+[0-9]{4}|[0-9]{1,2}[\/\-][0-9]{1,2}[\/\-][0-9]{2,4})/i);
+    if (deadlineMatch) extractedDeadline = deadlineMatch[1];
+
+    const subjectMatch = rawText.match(/(?:Subject|Sub)\s*[:\-\s]\s*(.+)/i);
+    if (subjectMatch) extractedSubject = subjectMatch[1];
+
+    // Extract numbered document list items (e.g., "1. Aadhaar Card")
+    const listMatches = rawText.matchAll(/^[0-9]+[\.\)]\s*(.+)$/gm);
+    for (const match of listMatches) {
+      if (match[1] && match[1].length < 100) {
+        extractedDocs.push(match[1].trim());
       }
+    }
+  }
+
+  const fallbackDates = [];
+  if (extractedDate) {
+    fallbackDates.push({ event: 'Document Issuance Date', date: extractedDate, consequence: 'Official date of notice' });
+  }
+  if (extractedDeadline) {
+    fallbackDates.push({ event: 'Submission Deadline', date: extractedDeadline, consequence: 'Mandatory deadline for document submission' });
+  }
+  if (fallbackDates.length === 0) {
+    fallbackDates.push({
+      event: 'Filing Written Response / Compliance',
+      date: 'As specified in notice (typically 15 to 30 days)',
+      consequence: 'Failure to respond may lead to ex-parte administrative determinations.'
+    });
+  }
+
+  return safeParseJson(responseText, {
+    documentType: extractedDocType,
+    targetAudience: 'Applicants / Property Owners / Named Addressees',
+    coreSummary: extractedSubject ? `Official notification regarding ${extractedSubject}.` : 'Official administrative communication requiring specific citizen compliance.',
+    plainLanguageMeaning: rawText ? `This document (${extractedDocType}${extractedRefNo ? ` Ref: ${extractedRefNo}` : ''}) requires specified citizen action and document submission.` : 'This document is a formal notification from a public authority specifying deadlines and procedural requirements.',
+    requiredActions: [
+      extractedDeadline ? `Submit required documents before ${extractedDeadline}.` : 'Verify reference details and submit required enclosures.',
+      'Obtain official stamped acknowledgement of submission.'
     ],
-    documentsRequired: [
-      'Proof of identity / Aadhaar card',
-      'Ownership or property tax receipts (if applicable)',
-      'Certified sanctioned plan or previous correspondence'
+    importantDatesAndDeadlines: fallbackDates,
+    documentsRequired: extractedDocs.length > 0 ? extractedDocs : [
+      'Proof of Identity / Aadhaar Card',
+      'Address Proof',
+      'Relevant Application Receipts'
     ],
-    eligibilityConditions: ['Applicable to named addressees or property occupiers'],
-    feesAndCosts: 'Applicable statutory verification fee or penalties as per municipal schedule.',
-    responsibleDepartment: 'Designated Municipal / Revenue / Administrative Authority',
+    eligibilityConditions: ['Applicable to named applicants / addressees'],
+    feesAndCosts: 'As per official department schedule.',
+    responsibleDepartment: extractedDocType || 'Issuing Government Department',
     consequencesAndPenalties: [
-      'Initiation of ex-parte proceedings under Municipal / Revenue Acts',
-      'Potential levy of non-compliance penalties'
+      'Potential administrative rejection or ex-parte proceedings if deadline is missed'
     ],
     citations: [
       {
-        pageOrSection: 'Operating Notice Clause',
-        quotedText: 'Show cause within thirty days...',
-        simpleInterpretation: 'Citizen is legally entitled to present written objections before any punitive action.'
+        pageOrSection: 'Notice Reference',
+        quotedText: extractedRefNo ? `Ref No: ${extractedRefNo}` : rawText.slice(0, 80),
+        simpleInterpretation: 'Official reference number establishing statutory record.'
       }
     ],
     officialSourceOrVerification: {
-      issuingAuthority: 'Competent Administrative Authority',
+      issuingAuthority: extractedDocType || 'Competent Authority',
+      gazetteOrRefNumber: extractedRefNo || 'Ref N/A',
       confidence: 'HIGH'
     },
     ocrQuality: 'HIGH'
