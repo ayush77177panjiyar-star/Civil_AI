@@ -167,8 +167,8 @@ export const CivicApiService = {
           'Use CivicAI tools if formal representation or grievance is needed.'
         ],
         officialSources: [
-          { name: 'Supreme Court of India', title: 'Supreme Court of India', url: 'https://main.sci.gov.in', sourceType: 'official' },
-          { name: 'National Portal of India', title: 'National Portal of India', url: 'https://india.gov.in', sourceType: 'official' }
+          { name: 'Supreme Court of India', departmentOrMinistry: 'Judiciary', portalUrl: 'https://main.sci.gov.in', isCentral: true, description: 'Supreme Court of India Official Portal' },
+          { name: 'National Portal of India', departmentOrMinistry: 'Government of India', portalUrl: 'https://india.gov.in', isCentral: true, description: 'National Portal of India' }
         ],
         disclaimer: 'CivicAI provides statutory guidance grounded in the Constitution of India and official government portals.',
         directAnswer

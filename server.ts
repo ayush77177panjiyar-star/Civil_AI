@@ -106,6 +106,17 @@ export async function createApp() {
   app.use(express.json({ limit: '35mb' }));
   app.use(express.urlencoded({ limit: '35mb', extended: true }));
 
+  // CORS & Preflight OPTIONS middleware for Vercel Serverless Functions
+  app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Request-Id, x-user-id, x-admin-token');
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end();
+    }
+    next();
+  });
+
   // Request timing & logging middleware
   app.use((req, res, next) => {
     const start = Date.now();

@@ -4,6 +4,12 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 let aiClient: GoogleGenAI | null = null;
+let lastApiKeyUsed: string | null = null;
+
+export function getGeminiApiKey(): string {
+  const key = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY || '';
+  return key ? key.trim() : '';
+}
 
 export function getGeminiModel(): string {
   const envModel = process.env.GEMINI_MODEL;
@@ -19,8 +25,9 @@ export function generateRequestId(): string {
 }
 
 export function getGenAI(): GoogleGenAI {
-  if (!aiClient) {
-    const apiKey = process.env.GEMINI_API_KEY || '';
+  const apiKey = getGeminiApiKey();
+  if (!aiClient || lastApiKeyUsed !== apiKey) {
+    lastApiKeyUsed = apiKey;
     aiClient = new GoogleGenAI({
       apiKey: apiKey,
       httpOptions: {
@@ -33,16 +40,27 @@ export function getGenAI(): GoogleGenAI {
   return aiClient;
 }
 
-export async function testGeminiHealth(): Promise<{ success: boolean; provider: string; model: string; message: string; error?: string }> {
+export async function testGeminiHealth(): Promise<{
+  success: boolean;
+  provider: string;
+  model: string;
+  hasApiKey: boolean;
+  apiKeyDetected: boolean;
+  message: string;
+  error?: string;
+}> {
   const model = getGeminiModel();
-  const apiKey = process.env.GEMINI_API_KEY || '';
+  const apiKey = getGeminiApiKey();
+  const hasApiKey = !!apiKey;
 
-  if (!apiKey) {
+  if (!hasApiKey) {
     return {
       success: true,
       provider: 'gemini',
       model,
-      message: 'AI service operational with grounded fallback'
+      hasApiKey: false,
+      apiKeyDetected: false,
+      message: 'AI service operational with grounded fallback (GEMINI_API_KEY not set in environment)'
     };
   }
 
@@ -61,22 +79,29 @@ export async function testGeminiHealth(): Promise<{ success: boolean; provider: 
         success: true,
         provider: 'gemini',
         model,
-        message: 'AI service operational'
+        hasApiKey: true,
+        apiKeyDetected: true,
+        message: 'AI service operational and authenticated with Google AI Studio'
       };
     }
     return {
       success: true,
       provider: 'gemini',
       model,
+      hasApiKey: true,
+      apiKeyDetected: true,
       message: 'AI service operational'
     };
   } catch (err: any) {
-    console.warn('[Gemini Health Check Warning]:', err?.message || err);
+    console.warn('[Gemini Health Check Notice]:', err?.message || err);
     return {
       success: true,
       provider: 'gemini',
       model,
-      message: 'AI service operational with grounded fallback'
+      hasApiKey: true,
+      apiKeyDetected: true,
+      message: 'AI service operational with grounded fallback',
+      error: err?.message || String(err)
     };
   }
 }

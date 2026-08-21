@@ -10,9 +10,6 @@ export default async function handler(req: any, res: any) {
     }
     const app = await appPromise;
 
-    // Vercel Serverless Path Normalization:
-    // When Vercel rewrites /api/civic/route to /api/[...path], req.url or req.query may contain Vercel path parameters.
-    // Ensure Express receives the expected clean /api/... URL.
     if (req.url) {
       const parsedUrl = new URL(req.url, `http://${req.headers?.host || 'localhost'}`);
       let pathname = parsedUrl.pathname;
@@ -31,7 +28,7 @@ export default async function handler(req: any, res: any) {
 
     return app(req, res);
   } catch (err: any) {
-    console.error('[Vercel Gateway Error]:', err);
+    console.error('[Vercel Index Handler Error]:', err);
     return res.status(500).json({
       success: false,
       error: {

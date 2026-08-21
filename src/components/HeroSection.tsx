@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Search, 
   ArrowRight, 
@@ -12,11 +12,14 @@ import {
   RefreshCw,
   Send,
   Compass,
-  Sparkles
+  Sparkles,
+  Camera
 } from 'lucide-react';
+import html2canvas from 'html2canvas';
 import { Language, ProblemRoutingResult } from '../types';
 import { CivicApiService } from '../services/aiService';
 import { t, SUPPORTED_LANGUAGES } from '../lib/i18n';
+import { saveUserMessageToSupabase } from '../lib/supabase';
 import { ExampleModal } from './ExampleModal';
 
 interface HeroSectionProps {
@@ -28,6 +31,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   language,
   onSelectTab
 }) => {
+  const heroRef = useRef<HTMLDivElement>(null);
   const [problemInput, setProblemInput] = useState('');
   const [isRouting, setIsRouting] = useState(false);
   const [routingResult, setRoutingResult] = useState<ProblemRoutingResult | null>(null);
@@ -35,6 +39,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   const [conversationId, setConversationId] = useState<string>(() => `conv_${Date.now()}`);
   const [followUpInput, setFollowUpInput] = useState('');
   const [showExampleModal, setShowExampleModal] = useState(false);
+
+  // Screenshot state
+  const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false);
+  const [screenshotStatus, setScreenshotStatus] = useState<string | null>(null);
+
+  // Supabase message save status toast state
+  const [saveConfirmation, setSaveConfirmation] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const activeLangObj = SUPPORTED_LANGUAGES.find(l => l.code === language) || SUPPORTED_LANGUAGES[0];
 
@@ -46,13 +57,76 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     { label: 'How can I file an RTI?', query: 'How can I file an RTI application in India?' }
   ];
 
+  const handleTakeScreenshot = async () => {
+    if (isCapturingScreenshot || !heroRef.current) return;
+    setIsCapturingScreenshot(true);
+    setScreenshotStatus(null);
+
+    try {
+      const canvas = await html2canvas(heroRef.current, {
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#0f172a',
+        scale: window.devicePixelRatio && window.devicePixelRatio > 1 ? window.devicePixelRatio : 2,
+        ignoreElements: (element) => {
+          return element.id === 'hero-screenshot-btn' || element.id === 'save-confirmation-toast';
+        }
+      });
+
+      const image = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.href = image;
+      link.download = `CivicAI_Hero_Screenshot_${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setScreenshotStatus('Screenshot generated successfully');
+      setTimeout(() => setScreenshotStatus(null), 3500);
+    } catch (err: any) {
+      console.error('Screenshot capture failed:', err);
+      setScreenshotStatus('Your screenshot could not be captured. Please try again.');
+      setTimeout(() => setScreenshotStatus(null), 4000);
+    } finally {
+      setIsCapturingScreenshot(false);
+    }
+  };
+
   const handleAnalyze = async (textToAnalyze?: string) => {
     const query = textToAnalyze || problemInput;
-    if (!query.trim()) return;
+    if (!query.trim() || isRouting) return;
 
     setIsRouting(true);
     setRoutingError(null);
+    setSaveConfirmation(null);
 
+    // Step 4 & 5: Persist user's message into Supabase and WAIT for response
+    try {
+      const persistRes = await saveUserMessageToSupabase(query, conversationId);
+      if (persistRes.success) {
+        // Step 6: Show "Message saved successfully" ONLY AFTER Supabase confirms successful insertion
+        setSaveConfirmation({
+          type: 'success',
+          text: 'Message saved successfully'
+        });
+      } else {
+        setSaveConfirmation({
+          type: 'error',
+          text: 'Your message could not be saved. Please try again.'
+        });
+      }
+    } catch (err) {
+      setSaveConfirmation({
+        type: 'error',
+        text: 'Your message could not be saved. Please try again.'
+      });
+    }
+
+    setTimeout(() => {
+      setSaveConfirmation(null);
+    }, 4000);
+
+    // Step 7: Continue existing AI response flow
     try {
       const data = await CivicApiService.routeProblem(query, language, undefined, conversationId);
       setRoutingResult(data);
@@ -77,6 +151,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     setProblemInput('');
     setRoutingResult(null);
     setRoutingError(null);
+    setSaveConfirmation(null);
     setConversationId(`conv_${Date.now()}`);
   };
 
@@ -88,7 +163,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   };
 
   return (
-    <div className="bg-slate-900 text-white min-h-[70vh] flex flex-col justify-between p-6 sm:p-10 border-b border-slate-800 relative overflow-hidden">
+    <div ref={heroRef} className="bg-slate-900 text-white min-h-[70vh] flex flex-col justify-between p-6 sm:p-10 border-b border-slate-800 relative overflow-hidden">
       
       {/* Background Subtle Gradient Accents */}
       <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
@@ -96,7 +171,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
       <div className="max-w-5xl mx-auto w-full relative z-10">
         
-        {/* Top Header Badge */}
+        {/* Top Header Badge & Action Toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-xs font-semibold text-sky-400 shadow-sm">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
@@ -104,16 +179,40 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
           </div>
 
-          {/* Optional Action to See Guidance Examples */}
-          <button
-            onClick={() => setShowExampleModal(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-amber-300 bg-amber-950/60 border border-amber-800/80 hover:bg-amber-900/80 transition-all shadow-xs"
-            title="See instructional examples on how to use CivicAI"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Try an Example</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Safe Hero Screenshot Button */}
+            <button
+              id="hero-screenshot-btn"
+              onClick={handleTakeScreenshot}
+              disabled={isCapturingScreenshot}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-sky-200 bg-slate-800 border border-slate-700 hover:bg-slate-700 hover:text-white transition-all shadow-xs disabled:opacity-60 cursor-pointer"
+              title="Capture a screenshot of the Hero section"
+            >
+              {isCapturingScreenshot ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 text-sky-400 animate-spin" />
+                  <span>Capturing...</span>
+                </>
+              ) : (
+                <>
+                  <Camera className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Screenshot</span>
+                </>
+              )}
+            </button>
+
+            {/* Instructional Examples Button */}
+            <button
+              onClick={() => setShowExampleModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-amber-300 bg-amber-950/60 border border-amber-800/80 hover:bg-amber-900/80 transition-all shadow-xs"
+              title="See instructional examples on how to use CivicAI"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Try an Example</span>
+            </button>
+          </div>
         </div>
+
 
         {/* Hero Title & Subtitle */}
         <div className="mb-8">
@@ -172,7 +271,53 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           </div>
         </div>
 
+        {/* Screenshot feedback notification */}
+        {screenshotStatus && (
+          <div className="mb-4 px-4 py-2 rounded-xl text-xs font-semibold flex items-center justify-between gap-2 bg-slate-800 border border-slate-700 text-sky-300 animate-in fade-in duration-200 shadow-md">
+            <div className="flex items-center gap-2">
+              <Camera className="w-4 h-4 text-sky-400" />
+              <span>{screenshotStatus}</span>
+            </div>
+            <button
+              onClick={() => setScreenshotStatus(null)}
+              className="text-[11px] text-slate-400 hover:text-white underline"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {/* Non-intrusive Supabase Message Save Confirmation Toast */}
+        {saveConfirmation && (
+          <div
+            id="save-confirmation-toast"
+            className={`mb-4 px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200 shadow-md ${
+              saveConfirmation.type === 'success'
+                ? 'bg-emerald-950/90 text-emerald-300 border border-emerald-700/80'
+                : 'bg-red-950/90 text-red-300 border border-red-800/80'
+            }`}
+            role="status"
+            aria-live="polite"
+          >
+            <div className="flex items-center gap-2">
+              {saveConfirmation.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+              )}
+              <span>{saveConfirmation.text}</span>
+            </div>
+            <button
+              onClick={() => setSaveConfirmation(null)}
+              className="text-[11px] opacity-70 hover:opacity-100 underline ml-2"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {/* Quick Informational Prompts */}
+
         <div className="flex flex-wrap items-center gap-2 mb-8">
           <span className="text-xs text-slate-400 font-semibold mr-1">Common Questions:</span>
           {quickQuestions.map((q, idx) => (

@@ -82,3 +82,30 @@ CREATE TRIGGER set_users_auth_updated_at
     BEFORE UPDATE ON public.users_auth
     FOR EACH ROW
     EXECUTE FUNCTION update_user_auth_timestamp();
+
+-- 5. Citizen User Messages Persistence Table
+CREATE TABLE IF NOT EXISTS public.user_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id TEXT NULL,
+    message TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    status TEXT NOT NULL DEFAULT 'saved' CHECK (status IN ('saved', 'failed'))
+);
+
+ALTER TABLE public.user_messages ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Anyone can insert user_messages" ON public.user_messages;
+DROP POLICY IF EXISTS "Users can read own user_messages" ON public.user_messages;
+
+CREATE POLICY "Anyone can insert user_messages"
+ON public.user_messages
+FOR INSERT
+TO public
+WITH CHECK (true);
+
+CREATE POLICY "Users can read own user_messages"
+ON public.user_messages
+FOR SELECT
+TO public
+USING (user_id = auth.uid()::text OR user_id IS NULL);
+

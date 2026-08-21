@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
-const meta = import.meta as any;
-const SUPABASE_URL = meta.env?.VITE_SUPABASE_URL || 'https://spkwmbxklttqkhnfamrp.supabase.co';
-const SUPABASE_ANON_KEY = meta.env?.VITE_SUPABASE_ANON_KEY || '';
+const metaEnv = (typeof import.meta !== 'undefined' && (import.meta as any)?.env) ? (import.meta as any).env : (typeof process !== 'undefined' && process.env ? process.env : {});
+const SUPABASE_URL = metaEnv.VITE_SUPABASE_URL || 'https://spkwmbxklttqkhnfamrp.supabase.co';
+const SUPABASE_ANON_KEY = metaEnv.VITE_SUPABASE_ANON_KEY || '';
 
 export const supabase = (SUPABASE_ANON_KEY && SUPABASE_ANON_KEY !== 'your_supabase_key_here') 
   ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) 
@@ -95,7 +95,7 @@ export async function registerUserInSupabase(
         full_name: fullName || null,
         profile_data: profileData,
         created_at: new Date().toISOString()
-      }).catch(() => {});
+      });
     } catch (e) {}
   }
 
@@ -213,7 +213,7 @@ export async function saveUserProfileToSupabase(
         full_name: profileData.name || null,
         profile_data: profileData,
         updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id' }).catch(() => {});
+      }, { onConflict: 'user_id' });
     } catch (e) {}
   }
 
@@ -252,7 +252,7 @@ export async function saveUserActivityToSupabase(
         activity_type: activityType,
         payload,
         created_at: new Date().toISOString()
-      }).catch(() => {});
+      });
     } catch (e) {}
   }
 
@@ -416,3 +416,56 @@ export async function upsertSchemesToSupabase(schemes: Array<{
     return { success: false, error: err?.message || err };
   }
 }
+
+export interface UserMessageRecord {
+  id?: string;
+  user_id?: string | null;
+  message: string;
+  created_at?: string;
+  status: 'saved' | 'failed';
+}
+
+/**
+ * Persist citizen user message to Supabase public.user_messages table.
+ * Waits for Supabase database confirmation before returning status.
+ */
+export async function saveUserMessageToSupabase(
+  message: string,
+  userId?: string | null
+): Promise<{ success: boolean; data?: any; error?: string }> {
+  const cleanMessage = message ? message.trim() : '';
+  if (!cleanMessage) {
+    return { success: false, error: 'Message cannot be empty.' };
+  }
+
+  if (!supabase) {
+    console.warn('[Supabase Warning]: Supabase client is not configured or initialized.');
+    return { success: false, error: 'Supabase client is offline or not configured.' };
+  }
+
+  try {
+    const record = {
+      user_id: userId ? userId.trim() : null,
+      message: cleanMessage,
+      status: 'saved' as const,
+      created_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from('user_messages')
+      .insert([record])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[Supabase Message Persist Error]:', error);
+      return { success: false, error: error.message || 'Database error occurred' };
+    }
+
+    return { success: true, data };
+  } catch (err: any) {
+    console.error('[Supabase Message Persist Exception]:', err);
+    return { success: false, error: err?.message || 'Network or database failure' };
+  }
+}
+
