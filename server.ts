@@ -1,6 +1,5 @@
 import express from 'express';
 import path from 'path';
-import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 
 import { routeCivicProblem } from './server/services/aiRouter';
@@ -13,8 +12,8 @@ import { interpretGovernmentDocument } from './server/services/documentInterpret
 import { handleGeminiStream } from './server/services/streamService';
 import { mapGeminiError, generateRequestId, testGeminiHealth, getGeminiModel } from './server/geminiClient';
 import { contextManager } from './server/contextManager';
-import { registerUserInSupabase, loginUserInSupabase } from './src/lib/supabase';
 import { getExamplesForTool, getLocalizedExampleText } from './src/data/civicExamples';
+import { serverRegisterUser, serverLoginUser } from './server/supabaseServer';
 
 dotenv.config();
 
@@ -592,9 +591,9 @@ export async function createApp() {
     res.json({ success: true });
   });
 
-  // 8C. CENTRALIZED USER AUTHENTICATION API
+  // 8C. MANDATORY UNIQUE USER ACCOUNT REGISTRATION & LOGIN
   app.post('/api/auth/register', async (req, res) => {
-    const { userId, password, email = '', fullName = '' } = req.body || {};
+    const { userId, password, email, fullName } = req.body || {};
     const cleanId = String(userId || '').trim();
     if (!cleanId || !password) {
       return res.status(400).json({
@@ -604,7 +603,7 @@ export async function createApp() {
     }
 
     try {
-      const result = await registerUserInSupabase(cleanId, password, email, fullName);
+      const result = await serverRegisterUser(cleanId, password, email, fullName);
       if (!result.success) {
         return res.status(400).json({
           success: false,
@@ -631,7 +630,7 @@ export async function createApp() {
     }
 
     try {
-      const result = await loginUserInSupabase(cleanId, password);
+      const result = await serverLoginUser(cleanId, password);
       if (!result.success) {
         return res.status(401).json({
           success: false,
@@ -712,6 +711,7 @@ export async function createApp() {
 
   // Vite middleware for local development only. Vercel serves the built frontend separately.
   if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
