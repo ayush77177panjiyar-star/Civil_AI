@@ -1,0 +1,21 @@
+import { testGeminiHealth, getGeminiModel, getGeminiApiKey } from '../server/geminiClient';
+
+export default async function handler(req: any, res: any) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+
+  if (req.method === 'OPTIONS') return res.status(200).end();
+
+  const apiKey = getGeminiApiKey();
+  const health = await testGeminiHealth();
+
+  return res.status(200).json({
+    status: 'ok',
+    api: true,
+    geminiConfigured: !!apiKey,
+    model: getGeminiModel(),
+    details: health,
+    uptimeSeconds: Math.floor(process.uptime()),
+    time: new Date().toISOString()
+  });
+}
