@@ -40,6 +40,7 @@ export const RightsNavigator: React.FC<RightsNavigatorProps> = ({
     userData.rights.contextDetails || ''
   );
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [result, setResult] = useState<RightsAnalysisResult | null>(
     userData.rights.result || null
   );
@@ -76,9 +77,13 @@ export const RightsNavigator: React.FC<RightsNavigatorProps> = ({
   const handleAnalyze = async (queryToUse?: string, contextToUse?: string) => {
     const q = queryToUse || problemQuery;
     const ctx = contextToUse !== undefined ? contextToUse : contextDetails;
-    if (!q.trim()) return;
+    if (!q.trim()) {
+      setErrorMsg('Please describe your grievance or legal problem before analyzing.');
+      return;
+    }
 
     setIsAnalyzing(true);
+    setErrorMsg(null);
     setResult(null);
     setCheckedEvidence({});
 
@@ -98,8 +103,9 @@ export const RightsNavigator: React.FC<RightsNavigatorProps> = ({
         '⚖️',
         { query: q, context: ctx, result: data }
       );
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error('Rights Navigator Error:', err);
+      setErrorMsg(err?.message || 'Rights analysis failed. Please verify your query and try again.');
     } finally {
       setIsAnalyzing(false);
     }

@@ -39,6 +39,7 @@ export const DocumentInterpreter: React.FC<DocumentInterpreterProps> = ({
   const [docText, setDocText] = useState(userData.document.docText || '');
   const [docTitle, setDocTitle] = useState(userData.document.docTitle || '');
   const [isInterpreting, setIsInterpreting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [result, setResult] = useState<DocumentInterpretationResult | null>(
     userData.document.result || null
   );
@@ -52,6 +53,7 @@ export const DocumentInterpreter: React.FC<DocumentInterpreterProps> = ({
 
   const handleTextChange = (val: string) => {
     setDocText(val);
+    setErrorMsg(null);
     updateUserData('document', { docText: val });
   };
 
@@ -61,6 +63,7 @@ export const DocumentInterpreter: React.FC<DocumentInterpreterProps> = ({
   };
 
   const handleUseExample = (sampleData: any) => {
+    setErrorMsg(null);
     if (sampleData.text) {
       setDocText(sampleData.text);
       updateUserData('document', { docText: sampleData.text });
@@ -74,9 +77,13 @@ export const DocumentInterpreter: React.FC<DocumentInterpreterProps> = ({
   const handleInterpret = async (textToUse?: string, titleToUse?: string) => {
     const text = textToUse || docText;
     const title = titleToUse || docTitle;
-    if (!text.trim()) return;
+    if (!text.trim()) {
+      setErrorMsg('Please upload or paste document text before interpreting.');
+      return;
+    }
 
     setIsInterpreting(true);
+    setErrorMsg(null);
     setResult(null);
 
     try {
@@ -93,8 +100,9 @@ export const DocumentInterpreter: React.FC<DocumentInterpreterProps> = ({
         '📚',
         { title, textContent: text.slice(0, 100), result: data }
       );
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error('Document Interpret Error:', err);
+      setErrorMsg(err?.message || 'Document processing failed. Please verify document text and try again.');
     } finally {
       setIsInterpreting(false);
     }
@@ -265,6 +273,21 @@ ${(result.importantDatesAndDeadlines || []).map(d => `- ${d.event}: ${d.date} ($
                 className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3.5 text-xs sm:text-sm font-mono text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none leading-relaxed"
               />
             </div>
+
+            {errorMsg && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                  <span>{errorMsg}</span>
+                </div>
+                <button
+                  onClick={() => handleInterpret()}
+                  className="px-3 py-1 rounded-lg text-[11px] font-bold bg-red-600 text-white hover:bg-red-700 transition-colors shrink-0"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
 
             <div className="flex items-center justify-between pt-2">
               <span className="text-[11px] text-slate-400">
