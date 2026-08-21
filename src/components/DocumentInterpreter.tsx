@@ -100,6 +100,79 @@ export const DocumentInterpreter: React.FC<DocumentInterpreterProps> = ({
     }
   };
 
+  const [copied, setCopied] = useState(false);
+  const [docQuestion, setDocQuestion] = useState('');
+  const [docAnswer, setDocAnswer] = useState<string | null>(null);
+  const [isAsking, setIsAsking] = useState(false);
+
+  const handleResetDoc = () => {
+    setDocText('');
+    setDocTitle('');
+    setResult(null);
+    setDocAnswer(null);
+    setDocQuestion('');
+    updateUserData('document', { docText: '', docTitle: '', result: null });
+  };
+
+  const handleCopySummary = () => {
+    if (!result) return;
+    const summaryText = `
+DOCUMENT INTERPRETATION REPORT
+Document Type: ${result.documentType}
+Title: ${docTitle || 'Official Order'}
+Core Summary: ${result.coreSummary}
+
+Mandated Actions:
+${(result.requiredActions || []).map((a, i) => `${i + 1}. ${a}`).join('\n')}
+
+Deadlines & Consequences:
+${(result.importantDatesAndDeadlines || []).map(d => `- ${d.event}: ${d.date} (${d.consequence || 'Mandatory'})`).join('\n')}
+    `.trim();
+
+    navigator.clipboard.writeText(summaryText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleAskQuestion = async () => {
+    if (!docQuestion.trim() || !docText.trim()) return;
+    setIsAsking(true);
+    setDocAnswer(null);
+    try {
+      const qLower = docQuestion.toLowerCase();
+      let answer = '';
+
+      if (qLower.includes('deadline') || qLower.includes('date') || qLower.includes('last date')) {
+        if (result?.importantDatesAndDeadlines && result.importantDatesAndDeadlines.length > 0) {
+          answer = result.importantDatesAndDeadlines.map(d => `${d.event}: ${d.date} (${d.consequence || 'Mandatory compliance'})`).join('\n');
+        } else {
+          answer = 'Not found in the provided document text.';
+        }
+      } else if (qLower.includes('action') || qLower.includes('step') || qLower.includes('do')) {
+        if (result?.requiredActions && result.requiredActions.length > 0) {
+          answer = result.requiredActions.map((a, i) => `${i + 1}. ${a}`).join('\n');
+        } else {
+          answer = 'Not found in the provided document text.';
+        }
+      } else if (qLower.includes('authority') || qLower.includes('department') || qLower.includes('who')) {
+        answer = result?.responsibleDepartment || result?.officialSourceOrVerification?.issuingAuthority || 'Competent Administrative Authority';
+      } else {
+        const streamRes = await CivicApiService.analyzeRights({
+          userProblem: `Based strictly on the following document text, answer this question: "${docQuestion}"\n\nDocument Text:\n${docText.slice(0, 1500)}`,
+          language
+        });
+        answer = streamRes.plainLanguageSummary || streamRes.verifiedFacts.join(' ') || 'Answer extracted from document context.';
+      }
+
+      setDocAnswer(answer);
+    } catch (err) {
+      console.error('Ask AI error:', err);
+      setDocAnswer('Could not extract answer from document. Please verify document text.');
+    } finally {
+      setIsAsking(false);
+    }
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -312,6 +385,55 @@ export const DocumentInterpreter: React.FC<DocumentInterpreterProps> = ({
                   <strong className="text-slate-900">Issuing Department: </strong>
                   <span>{result.responsibleDepartment || result.officialSourceOrVerification?.issuingAuthority}</span>
                 </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleCopySummary}
+                    className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors flex items-center gap-1"
+                  >
+                    <span>{copied ? '✓ Copied' : 'Copy Summary'}</span>
+                  </button>
+
+                  <button
+                    onClick={handleResetDoc}
+                    className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 transition-colors"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+
+              {/* Interactive Document Question Answering */}
+              <div className="pt-4 border-t border-slate-200 space-y-3">
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <HelpCircle className="w-4 h-4 text-sky-700" />
+                  Ask AI About This Document:
+                </h4>
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={docQuestion}
+                    onChange={(e) => setDocQuestion(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAskQuestion()}
+                    placeholder="e.g. What is the deadline? What documents are required?"
+                    className="flex-1 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                  />
+                  <button
+                    onClick={handleAskQuestion}
+                    disabled={isAsking || !docQuestion.trim()}
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-sky-700 hover:bg-sky-800 text-white disabled:opacity-50 transition-colors shadow-2xs"
+                  >
+                    {isAsking ? 'Searching...' : 'Ask AI'}
+                  </button>
+                </div>
+
+                {docAnswer && (
+                  <div className="p-3.5 bg-sky-50/70 border border-sky-200 rounded-xl text-xs text-slate-900 leading-relaxed font-sans font-medium whitespace-pre-line animate-in fade-in duration-150">
+                    <strong className="text-sky-900 block mb-1">Answer from Document:</strong>
+                    {docAnswer}
+                  </div>
+                )}
               </div>
 
             </div>

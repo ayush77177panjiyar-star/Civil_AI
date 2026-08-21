@@ -202,8 +202,37 @@ Contact: ${answers.mobileNumber || 'Aadhaar Registered Mobile'}
     setTimeout(() => setCopied(false), 2500);
   };
 
+  const handleGenerateAiDocument = async () => {
+    setIsGenerating(true);
+    try {
+      const res = await CivicApiService.generateFormRepresentation({
+        templateTitle: selectedTemplate.title,
+        department: selectedTemplate.department,
+        answers,
+        applicantName: answers.applicantName || 'Applicant',
+        language
+      });
+      if (res && res.documentText) {
+        setGeneratedDocument(res.documentText);
+        updateUserData('form', { generatedDocumentText: res.documentText });
+        recordActivity(
+          'form_application',
+          `Formal AI Application: ${selectedTemplate.title}`,
+          'forms',
+          '✍️',
+          { templateId: selectedTemplate.id }
+        );
+      }
+    } catch (err) {
+      console.error('Form AI generation notice:', err);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const handleDownloadPdf = () => {
-    generateGenericDocumentPdf(selectedTemplate.title, generatePreviewText(), answers.applicantName || 'Citizen');
+    const textToDownload = generatedDocument || generatePreviewText();
+    generateGenericDocumentPdf(selectedTemplate.title, textToDownload, answers.applicantName || 'Citizen');
     recordActivity(
       'form_application',
       selectedTemplate.title,
@@ -384,6 +413,15 @@ Contact: ${answers.mobileNumber || 'Aadhaar Registered Mobile'}
 
               <div className="flex items-center gap-2">
                 <button
+                  onClick={handleGenerateAiDocument}
+                  disabled={isGenerating}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-2xs flex items-center gap-1 transition-all disabled:opacity-50"
+                >
+                  <Sparkles className={`w-3.5 h-3.5 ${isGenerating ? 'animate-spin' : ''}`} />
+                  <span>{isGenerating ? 'Drafting...' : 'AI Legal Draft'}</span>
+                </button>
+
+                <button
                   onClick={handleCopy}
                   className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors flex items-center gap-1"
                 >
@@ -402,7 +440,7 @@ Contact: ${answers.mobileNumber || 'Aadhaar Registered Mobile'}
             </div>
 
             <div className="p-5 bg-slate-50 rounded-xl border border-slate-200 font-mono text-xs text-slate-800 leading-relaxed whitespace-pre-line min-h-[350px]">
-              {generatePreviewText()}
+              {generatedDocument || generatePreviewText()}
             </div>
 
           </div>

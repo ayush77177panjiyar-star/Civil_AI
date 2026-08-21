@@ -137,78 +137,179 @@ MANDATORY INSTRUCTION: Generate the complete analysis and all text fields in ${l
     console.warn('[Rights Navigator Notice]:', err?.message || err);
   }
 
-  const parsed = safeParseJson(responseText, {
-    problemCategory: 'Civic Grievance & Legal Redressal',
-    plainLanguageSummary: `Statutory analysis of your issue regarding: ${userProblem}`,
-    verifiedFacts: [
-      'Grievances against sellers, landlords, or civic bodies are governed by specific statutory acts in India.',
-      'Deficiency in service, unfair trade practices, or withholding of security deposits give rise to statutory redressal rights.'
-    ],
-    possibleInterpretations: [
-      'If the goods/services were paid for and not delivered, it constitutes a prima facie deficiency in service under Consumer Protection Act, 2019.',
-      'If rental deposit is withheld without itemized damage invoices, Model Tenancy Act / Rent Control provisions apply.'
-    ],
-    relevantActsAndRules: [
+  const qLower = (userProblem + ' ' + contextDetails).toLowerCase();
+  
+  let fallbackCategory = 'Civic Grievance & Legal Redressal';
+  let fallbackFacts = [
+    `Grievances regarding "${userProblem.slice(0, 60)}" are governed by statutory acts in India.`,
+    'Citizens have legal recourse under administrative grievance portals, statutory ombudsmen, and public commissions.'
+  ];
+  let fallbackInterpretations = [
+    `Based on your input, if the competent authority fails to resolve the issue within the statutory timeline, statutory escalation applies.`,
+    'Preserving written communication, transaction references, and acknowledgement receipts establishes prima facie evidence.'
+  ];
+  let fallbackActs = [
+    {
+      actName: 'Consumer Protection Act, 2019 / CPGRAMS Grievance Rules',
+      sectionOrRule: 'Statutory Grievance Redressal Mechanism',
+      simpleExplanation: 'Empowers citizens to seek formal resolution, refund, compensation, or administrative correction.',
+      officialSource: 'https://pgportal.gov.in'
+    }
+  ];
+  let fallbackNextSteps = [
+    'Issue a formal written representation specifying a 7-to-15 day resolution window.',
+    'File an online administrative grievance on CPGRAMS (pgportal.gov.in) or state public grievance portal.',
+    'If unresolved, escalate to the competent statutory tribunal or commission.'
+  ];
+  let fallbackLadder = [
+    {
+      level: 1,
+      stageName: 'Direct Written Representation',
+      authority: 'Designated Public Officer / Service Provider Grievance Cell',
+      timeframe: '7 to 15 Days',
+      procedure: 'Submit a formal written petition with receipts and proof of inconvenience.',
+      officialLink: 'Official Department Portal'
+    },
+    {
+      level: 2,
+      stageName: 'Public Grievance Portal (CPGRAMS / State Helpline)',
+      authority: 'Department of Administrative Reforms & Public Grievances (DARPG)',
+      timeframe: '15 to 30 Days',
+      procedure: 'Register an online grievance ticket monitored by government nodal officers.',
+      officialLink: 'https://pgportal.gov.in'
+    },
+    {
+      level: 3,
+      stageName: 'Statutory Commission / Appellate Authority',
+      authority: 'Designated Appellate Authority / District Forum / Commission',
+      timeframe: 'Statutory Judicial Timeline',
+      procedure: 'File a formal petition or statutory appeal seeking direction, refund, or penalty.',
+      officialLink: 'https://pgportal.gov.in'
+    }
+  ];
+  let fallbackAuthority = {
+    name: 'Central / State Public Grievance Redressal Authority',
+    jurisdiction: 'District / State / National Level',
+    contactOrPortal: 'CPGRAMS Portal | Toll-Free Public Helpline',
+    portalUrl: 'https://pgportal.gov.in'
+  };
+
+  // 1. RTI Query Detection
+  if (qLower.includes('rti') || qLower.includes('right to information') || qLower.includes('public information') || qLower.includes('no reply for 3') || qLower.includes('first appeal')) {
+    fallbackCategory = 'Right to Information (RTI Act 2005)';
+    fallbackFacts = [
+      'Under Section 7(1) of the RTI Act 2005, the Public Information Officer (PIO) is mandated to provide information within 30 days of receipt.',
+      'If no response is received within 30 days, it is deemed as a refusal of request under Section 7(2).'
+    ];
+    fallbackInterpretations = [
+      'Non-reply within 30 days entitles the applicant to file a First Appeal under Section 19(1) without paying additional fee.',
+      'The First Appellate Authority (FAA) must decide the appeal within 30 days (extendable to 45 days with written reasons).'
+    ];
+    fallbackActs = [
       {
-        actName: 'Consumer Protection Act, 2019',
-        sectionOrRule: 'Section 2(11) & Section 35',
-        simpleExplanation: 'Defines deficiency in service and empowers consumers to seek refund, compensation, and litigation costs.',
-        officialSource: 'https://consumerhelpline.gov.in'
+        actName: 'Right to Information Act, 2005',
+        sectionOrRule: 'Section 7(1), Section 7(2) & Section 19(1)',
+        simpleExplanation: 'Mandates 30-day disclosure deadline and provides fee-free First Appeal against non-response or delay.',
+        officialSource: 'https://rtionline.gov.in'
       }
-    ],
-    recommendedNextSteps: [
-      'Issue formal notice or ticket to the merchant/landlord specifying 7-day resolution window.',
-      'Lodge a national grievance on consumerhelpline.gov.in (NCH 1915).',
-      'If unresolved, file an e-Daakhil consumer petition before the District Commission.'
-    ],
+    ];
+    fallbackNextSteps = [
+      'Draft a First Appeal under Section 19(1) addressed to the First Appellate Authority of the public department.',
+      'Attach a copy of your original RTI application and payment receipt/registration number.',
+      'If the First Appeal is ignored after 45 days, file a Second Appeal before the Central/State Information Commission under Section 19(3).'
+    ];
+    fallbackLadder = [
+      {
+        level: 1,
+        stageName: 'RTI Application to PIO',
+        authority: 'Public Information Officer (PIO)',
+        timeframe: '30 Days Mandatory',
+        procedure: 'File initial RTI application with ₹10 statutory fee.',
+        officialLink: 'https://rtionline.gov.in'
+      },
+      {
+        level: 2,
+        stageName: 'First Appeal under Section 19(1)',
+        authority: 'First Appellate Authority (Senior Officer in same Dept)',
+        timeframe: '30 to 45 Days',
+        procedure: 'Submit First Appeal stating non-receipt of information within 30 days.',
+        officialLink: 'https://rtionline.gov.in'
+      },
+      {
+        level: 3,
+        stageName: 'Second Appeal before Information Commission',
+        authority: 'State / Central Information Commission (SIC / CIC)',
+        timeframe: 'Judicial Appeal Window',
+        procedure: 'File Second Appeal under Section 19(3) seeking penalty on PIO under Section 20(1) (₹250/day penalty).',
+        officialLink: 'https://cic.gov.in'
+      }
+    ];
+    fallbackAuthority = {
+      name: 'First Appellate Authority / Central & State Information Commissions',
+      jurisdiction: 'Pan-India Public Authorities',
+      contactOrPortal: 'RTI Online Portal | CIC Portal',
+      portalUrl: 'https://rtionline.gov.in'
+    };
+  } else if (qLower.includes('tenant') || qLower.includes('landlord') || qLower.includes('rent') || qLower.includes('deposit') || qLower.includes('evict')) {
+    fallbackCategory = 'Tenancy & Rental Rights (Model Tenancy Act)';
+    fallbackFacts = [
+      'Under the Model Tenancy Act / State Rent Control Acts, landlords cannot withhold security deposit without itemized repair invoices.',
+      'Security deposit for residential premises is capped at a maximum of 2 months rent.'
+    ];
+    fallbackInterpretations = [
+      'If the landlord retains security deposit after tenancy conclusion without valid justification, it constitutes unauthorized withholding.',
+      'Eviction requires mandatory statutory notice and order from Rent Authority.'
+    ];
+    fallbackActs = [
+      {
+        actName: 'Model Tenancy Act / State Rent Control Act',
+        sectionOrRule: 'Rent Security & Dispute Provisions',
+        simpleExplanation: 'Protects tenants against arbitrary deposit forfeiture and unlawful eviction.',
+        officialSource: 'https://mhupa.gov.in'
+      }
+    ];
+    fallbackNextSteps = [
+      'Send a formal legal notice demanding refund of security deposit within 7 to 15 days.',
+      'File a petition before the Rent Authority / Rent Tribunal of your district.'
+    ];
+  } else if (qLower.includes('road') || qLower.includes('pothole') || qLower.includes('drain') || qLower.includes('water') || qLower.includes('municipal') || qLower.includes('garbage')) {
+    fallbackCategory = 'Municipal Services & Local Infrastructure Rights';
+    fallbackFacts = [
+      'Municipal Corporation Acts mandate urban local bodies to maintain public roads, civic sanitation, streetlights, and drainage.',
+      'Citizens are entitled to clean water supply and safe road maintenance under municipal civic charters.'
+    ];
+    fallbackNextSteps = [
+      'Register a ticket on your local Municipal Citizen App or CPGRAMS portal with geo-tagged photos.',
+      'Submit a formal representation to the Municipal Commissioner / Executive Engineer.',
+      'If unresolved, file an RTI requesting certified copies of road maintenance tenders and Measurement Book (MB) entries.'
+    ];
+  }
+
+  const parsed = safeParseJson(responseText, {
+    problemCategory: fallbackCategory,
+    plainLanguageSummary: `Statutory legal analysis regarding: ${userProblem}`,
+    verifiedFacts: fallbackFacts,
+    possibleInterpretations: fallbackInterpretations,
+    relevantActsAndRules: fallbackActs,
+    recommendedNextSteps: fallbackNextSteps,
     evidenceChecklist: [
       {
-        name: 'Payment Receipt & Tax Invoice',
+        name: 'Payment Receipt / Transaction Log / Notice Copy',
         importance: 'MANDATORY',
-        purpose: 'Proves transaction validity and commercial consideration.',
-        tip: 'Ensure transaction reference ID and timestamp are visible.'
+        purpose: 'Establishes transaction date, reference number, and legal locus standi.',
+        tip: 'Keep digital and physical copies organized.'
       },
       {
         name: 'Written Communication Log / Email Trail',
         importance: 'ESSENTIAL',
-        purpose: 'Documents deficiency and failure to remedy by the counterparty.',
-        tip: 'Export emails as PDF with complete headers.'
+        purpose: 'Proves prior attempt to resolve grievance directly.',
+        tip: 'Export correspondence as PDF.'
       }
     ],
-    escalationLadder: [
-      {
-        level: 1,
-        stageName: 'Direct Grievance & Written Notice',
-        authority: 'Service Provider / Merchant Grievance Officer',
-        timeframe: '7 to 15 Days',
-        procedure: 'Send a structured formal representation demanding refund or repair.',
-        officialLink: 'Direct counterparty support portal'
-      },
-      {
-        level: 2,
-        stageName: 'National Consumer Helpline (NCH / INGRAM)',
-        authority: 'Department of Consumer Affairs (Govt. of India)',
-        timeframe: '15 to 30 Days',
-        procedure: 'Register ticket via Toll-Free 1915 or online on consumerhelpline.gov.in for government-monitored mediation.',
-        officialLink: 'https://consumerhelpline.gov.in'
-      },
-      {
-        level: 3,
-        stageName: 'Statutory Consumer Commission (e-Daakhil)',
-        authority: 'District Consumer Disputes Redressal Commission',
-        timeframe: 'Judicial Timeline',
-        procedure: 'File digital petition on edaakhil.nic.in seeking refund, compensation, and interest.',
-        officialLink: 'https://edaakhil.nic.in'
-      }
-    ],
-    responsibleAuthority: {
-      name: 'National Consumer Disputes Redressal / Central Consumer Protection Authority',
-      jurisdiction: 'Pan-India & State Consumer Commissions',
-      contactOrPortal: 'NCH Toll-Free: 1915 | INGRAM Portal',
-      portalUrl: 'https://consumerhelpline.gov.in'
-    },
+    escalationLadder: fallbackLadder,
+    responsibleAuthority: fallbackAuthority,
     confidence: 'HIGH',
-    disclaimer: 'Analysis grounded in Indian statutory provisions (Consumer Protection Act 2019, Model Tenancy Act). For formal litigation, consult an enrolled legal advocate.'
+    disclaimer: 'Analysis grounded in Indian statutory provisions (RTI Act 2005, Consumer Protection Act 2019, Municipal Acts). For court proceedings, consult an advocate.'
   });
 
   return {
