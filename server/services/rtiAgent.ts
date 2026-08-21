@@ -44,63 +44,69 @@ Core Objectives:
 ${langInstruction}
 Output structured JSON matching schema.`;
 
-  const ai = getGenAI();
-  const model = getGeminiModel();
+  let responseText: string | null = null;
+  try {
+    const ai = getGenAI();
+    const model = getGeminiModel();
 
-  const response = await withRetry(async () => {
-    return await ai.models.generateContent({
-      model,
-      contents: `SELECTED CITIZEN RESPONSE LANGUAGE: ${langName} (${nativeName}) - Code: ${langCode}
+    const response = await withRetry(async () => {
+      return await ai.models.generateContent({
+        model,
+        contents: `SELECTED CITIZEN RESPONSE LANGUAGE: ${langName} (${nativeName}) - Code: ${langCode}
 Citizen Query: "${userProblem}". State/UT specified: "${stateOrUt}"
 
 MANDATORY INSTRUCTION: You MUST formulate all fields (objective, soughtInformationSummary, clarificationQuestions, questions, placeholders, reasons, portal guidance) in ${langName} (${nativeName}) because the user selected ${langName}.`,
-      config: {
-        systemInstruction,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            objective: { type: Type.STRING },
-            soughtInformationSummary: { type: Type.STRING },
-            likelyAuthority: { type: Type.STRING },
-            isCentralAuthority: { type: Type.BOOLEAN },
-            stateOrUt: { type: Type.STRING },
-            clarificationQuestions: {
-              type: Type.ARRAY,
-              items: {
+        config: {
+          systemInstruction,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              objective: { type: Type.STRING },
+              soughtInformationSummary: { type: Type.STRING },
+              likelyAuthority: { type: Type.STRING },
+              isCentralAuthority: { type: Type.BOOLEAN },
+              stateOrUt: { type: Type.STRING },
+              clarificationQuestions: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    id: { type: Type.STRING },
+                    question: { type: Type.STRING },
+                    placeholder: { type: Type.STRING },
+                    reason: { type: Type.STRING },
+                    suggestedValues: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING }
+                    }
+                  },
+                  required: ['id', 'question', 'reason']
+                }
+              },
+              initialDraftReady: { type: Type.BOOLEAN },
+              officialPortalInfo: {
                 type: Type.OBJECT,
                 properties: {
-                  id: { type: Type.STRING },
-                  question: { type: Type.STRING },
-                  placeholder: { type: Type.STRING },
-                  reason: { type: Type.STRING },
-                  suggestedValues: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING }
-                  }
+                  name: { type: Type.STRING },
+                  url: { type: Type.STRING },
+                  guidance: { type: Type.STRING },
+                  stateWarning: { type: Type.STRING }
                 },
-                required: ['id', 'question', 'reason']
+                required: ['name', 'url', 'guidance']
               }
             },
-            initialDraftReady: { type: Type.BOOLEAN },
-            officialPortalInfo: {
-              type: Type.OBJECT,
-              properties: {
-                name: { type: Type.STRING },
-                url: { type: Type.STRING },
-                guidance: { type: Type.STRING },
-                stateWarning: { type: Type.STRING }
-              },
-              required: ['name', 'url', 'guidance']
-            }
-          },
-          required: ['objective', 'soughtInformationSummary', 'likelyAuthority', 'isCentralAuthority', 'stateOrUt', 'clarificationQuestions', 'officialPortalInfo']
+            required: ['objective', 'soughtInformationSummary', 'likelyAuthority', 'isCentralAuthority', 'stateOrUt', 'clarificationQuestions', 'officialPortalInfo']
+          }
         }
-      }
+      });
     });
-  });
+    responseText = response.text || null;
+  } catch (err: any) {
+    console.warn('[RTI Analyze Notice]:', err?.message || err);
+  }
 
-  return safeParseJson(response.text, {
+  return safeParseJson(responseText, {
     objective: userProblem,
     soughtInformationSummary: `Seeking certified public records regarding: ${userProblem}`,
     likelyAuthority: stateOrUt ? `Public Information Officer, ${stateOrUt}` : 'Public Information Officer (PIO)',
@@ -144,13 +150,15 @@ ${langInstruction}
 Write the subject, information points, declaration, and application content in ${langName} (${nativeName}).
 Output structured JSON conforming to schema.`;
 
-  const ai = getGenAI();
-  const model = getGeminiModel();
+  let responseText: string | null = null;
+  try {
+    const ai = getGenAI();
+    const model = getGeminiModel();
 
-  const response = await withRetry(async () => {
-    return await ai.models.generateContent({
-      model,
-      contents: `SELECTED CITIZEN RESPONSE LANGUAGE: ${langName} (${nativeName}) - Code: ${langCode}
+    const response = await withRetry(async () => {
+      return await ai.models.generateContent({
+        model,
+        contents: `SELECTED CITIZEN RESPONSE LANGUAGE: ${langName} (${nativeName}) - Code: ${langCode}
 RTI Subject Problem: ${userProblem}
 Citizen Clarifications: ${JSON.stringify(answers)}
 Applicant Particulars: ${JSON.stringify(applicantDetails)}
@@ -159,57 +167,61 @@ State/UT: ${stateOrUt}
 Is Central Public Authority: ${isCentralAuthority}
 
 MANDATORY INSTRUCTION: You MUST formulate the RTI draft fields (subject, informationPoints, declaration, supportingContext, feeDetails, officialRouteNote) in ${langName} (${nativeName}) because the user selected ${langName}.`,
-      config: {
-        systemInstruction,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            publicAuthority: { type: Type.STRING },
-            department: { type: Type.STRING },
-            isCentralAuthority: { type: Type.BOOLEAN },
-            stateOrUt: { type: Type.STRING },
-            pioDesignation: { type: Type.STRING },
-            pioAddress: { type: Type.STRING },
-            subject: { type: Type.STRING },
-            applicantName: { type: Type.STRING },
-            applicantAddress: { type: Type.STRING },
-            applicantPhone: { type: Type.STRING },
-            applicantEmail: { type: Type.STRING },
-            informationPoints: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING }
+        config: {
+          systemInstruction,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              publicAuthority: { type: Type.STRING },
+              department: { type: Type.STRING },
+              isCentralAuthority: { type: Type.BOOLEAN },
+              stateOrUt: { type: Type.STRING },
+              pioDesignation: { type: Type.STRING },
+              pioAddress: { type: Type.STRING },
+              subject: { type: Type.STRING },
+              applicantName: { type: Type.STRING },
+              applicantAddress: { type: Type.STRING },
+              applicantPhone: { type: Type.STRING },
+              applicantEmail: { type: Type.STRING },
+              informationPoints: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              },
+              periodFrom: { type: Type.STRING },
+              periodTo: { type: Type.STRING },
+              supportingContext: { type: Type.STRING },
+              feeDetails: { type: Type.STRING },
+              declaration: { type: Type.STRING },
+              officialRouteNote: { type: Type.STRING },
+              officialPortalUrl: { type: Type.STRING },
+              officialPortalName: { type: Type.STRING }
             },
-            periodFrom: { type: Type.STRING },
-            periodTo: { type: Type.STRING },
-            supportingContext: { type: Type.STRING },
-            feeDetails: { type: Type.STRING },
-            declaration: { type: Type.STRING },
-            officialRouteNote: { type: Type.STRING },
-            officialPortalUrl: { type: Type.STRING },
-            officialPortalName: { type: Type.STRING }
-          },
-          required: [
-            'publicAuthority',
-            'department',
-            'pioDesignation',
-            'pioAddress',
-            'subject',
-            'applicantName',
-            'applicantAddress',
-            'informationPoints',
-            'feeDetails',
-            'declaration',
-            'officialRouteNote',
-            'officialPortalUrl',
-            'officialPortalName'
-          ]
+            required: [
+              'publicAuthority',
+              'department',
+              'pioDesignation',
+              'pioAddress',
+              'subject',
+              'applicantName',
+              'applicantAddress',
+              'informationPoints',
+              'feeDetails',
+              'declaration',
+              'officialRouteNote',
+              'officialPortalUrl',
+              'officialPortalName'
+            ]
+          }
         }
-      }
+      });
     });
-  });
+    responseText = response.text || null;
+  } catch (err: any) {
+    console.warn('[RTI Generate Notice]:', err?.message || err);
+  }
 
-  return safeParseJson(response.text, {
+  return safeParseJson(responseText, {
     publicAuthority: likelyAuthority || 'Competent Public Information Officer',
     department: 'Designated Public Authority Department',
     pioDesignation: 'Public Information Officer (PIO)',

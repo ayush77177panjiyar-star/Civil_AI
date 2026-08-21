@@ -36,53 +36,59 @@ Ensure 'nextQuestionToAsk', 'assistantMessage', and 'progressSummary' are formul
 4. If essential fields are filled (Name, Address/Contact, Purpose/Grievance), set isReadyToPreview = true.
 Output JSON matching the schema.`;
 
-  const ai = getGenAI();
-  const model = getGeminiModel();
+  let responseText: string | null = null;
+  try {
+    const ai = getGenAI();
+    const model = getGeminiModel();
 
-  const response = await withRetry(async () => {
-    return await ai.models.generateContent({
-      model,
-      contents: `SELECTED CITIZEN RESPONSE LANGUAGE: ${langName} (${nativeName}) - Code: ${langCode}
+    const response = await withRetry(async () => {
+      return await ai.models.generateContent({
+        model,
+        contents: `SELECTED CITIZEN RESPONSE LANGUAGE: ${langName} (${nativeName}) - Code: ${langCode}
 Form Title: ${templateTitle} (ID: ${templateId})
 Accumulated Field Values: ${JSON.stringify(currentAnswers)}
 Latest Citizen Input: "${userMessage}"
 
 MANDATORY INSTRUCTION: You MUST formulate nextQuestionToAsk, assistantMessage, and progressSummary in ${langName} (${nativeName}) because the user selected ${langName}.`,
-      config: {
-        systemInstruction,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            extractedFields: {
-              type: Type.OBJECT,
-              properties: {
-                applicantName: { type: Type.STRING },
-                fatherOrHusbandName: { type: Type.STRING },
-                dobOrAge: { type: Type.STRING },
-                gender: { type: Type.STRING },
-                residentialAddress: { type: Type.STRING },
-                mobileNumber: { type: Type.STRING },
-                email: { type: Type.STRING },
-                aadhaarNumber: { type: Type.STRING },
-                annualIncome: { type: Type.STRING },
-                purpose: { type: Type.STRING },
-                specificGrievanceOrDetails: { type: Type.STRING },
-                districtAndState: { type: Type.STRING }
-              }
+        config: {
+          systemInstruction,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              extractedFields: {
+                type: Type.OBJECT,
+                properties: {
+                  applicantName: { type: Type.STRING },
+                  fatherOrHusbandName: { type: Type.STRING },
+                  dobOrAge: { type: Type.STRING },
+                  gender: { type: Type.STRING },
+                  residentialAddress: { type: Type.STRING },
+                  mobileNumber: { type: Type.STRING },
+                  email: { type: Type.STRING },
+                  aadhaarNumber: { type: Type.STRING },
+                  annualIncome: { type: Type.STRING },
+                  purpose: { type: Type.STRING },
+                  specificGrievanceOrDetails: { type: Type.STRING },
+                  districtAndState: { type: Type.STRING }
+                }
+              },
+              nextQuestionToAsk: { type: Type.STRING },
+              assistantMessage: { type: Type.STRING },
+              progressSummary: { type: Type.STRING },
+              isReadyToPreview: { type: Type.BOOLEAN }
             },
-            nextQuestionToAsk: { type: Type.STRING },
-            assistantMessage: { type: Type.STRING },
-            progressSummary: { type: Type.STRING },
-            isReadyToPreview: { type: Type.BOOLEAN }
-          },
-          required: ['extractedFields', 'nextQuestionToAsk', 'assistantMessage', 'progressSummary', 'isReadyToPreview']
+            required: ['extractedFields', 'nextQuestionToAsk', 'assistantMessage', 'progressSummary', 'isReadyToPreview']
+          }
         }
-      }
+      });
     });
-  });
+    responseText = response.text || null;
+  } catch (err: any) {
+    console.warn('[Form Step Notice]:', err?.message || err);
+  }
 
-  return safeParseJson(response.text, {
+  return safeParseJson(responseText, {
     extractedFields: currentAnswers,
     nextQuestionToAsk: 'Could you please provide your full name and residential district/state to proceed with the application?',
     assistantMessage: 'I am helping you fill out the application details.',
@@ -112,22 +118,29 @@ Structured Data: ${JSON.stringify(answers)}
 
 MANDATORY INSTRUCTION: Generate the complete formal application letter text in ${langName} (${nativeName}).`;
 
-  const ai = getGenAI();
-  const model = getGeminiModel();
+  let responseText = '';
+  try {
+    const ai = getGenAI();
+    const model = getGeminiModel();
 
-  const response = await withRetry(async () => {
-    return await ai.models.generateContent({
-      model,
-      contents: prompt,
-      config: {
-        systemInstruction,
-        responseMimeType: 'text/plain'
-      }
+    const response = await withRetry(async () => {
+      return await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          systemInstruction,
+          responseMimeType: 'text/plain'
+        }
+      });
     });
-  });
+    responseText = response.text || '';
+  } catch (err: any) {
+    console.warn('[Form Generate Notice]:', err?.message || err);
+    responseText = `To,\nThe Competent Authority / Designated Officer,\n${department || 'Designated Department'}\n\nSubject: Formal Application / Representation regarding ${templateTitle}\n\nRespected Sir/Madam,\n\nI, ${applicantName}, resident of ${answers.districtAndState || 'India'}, hereby submit this formal representation regarding ${templateTitle}.\n\nDetails of Representation:\n${Object.entries(answers).map(([k, v]) => `- ${k}: ${v}`).join('\n')}\n\nI request you to kindly examine this representation and issue appropriate orders/sanctions at the earliest.\n\nYours faithfully,\n${applicantName}\nDate: ${new Date().toLocaleDateString('en-IN')}`;
+  }
 
   return {
-    documentText: response.text || ''
+    documentText: responseText
   };
 }
 

@@ -42,105 +42,111 @@ Explain the document in ${langName} (${nativeName}) regardless of what language 
 
 Output structured JSON matching schema.`;
 
-  const ai = getGenAI();
-  const model = getGeminiModel();
+  let responseText: string | null = null;
+  try {
+    const ai = getGenAI();
+    const model = getGeminiModel();
 
-  const parts: any[] = [];
-  if (base64Data) {
+    const parts: any[] = [];
+    if (base64Data) {
+      parts.push({
+        inlineData: {
+          mimeType: mimeType,
+          data: base64Data
+        }
+      });
+    }
+
     parts.push({
-      inlineData: {
-        mimeType: mimeType,
-        data: base64Data
-      }
-    });
-  }
-
-  parts.push({
-    text: `SELECTED CITIZEN RESPONSE LANGUAGE: ${langName} (${nativeName}) - Code: ${langCode}
+      text: `SELECTED CITIZEN RESPONSE LANGUAGE: ${langName} (${nativeName}) - Code: ${langCode}
 MANDATORY INSTRUCTION: You MUST explain this document and formulate all textual fields in ${langName} (${nativeName}).
 Analyze and interpret this official government/legal document. ${textContent ? `Document text content:\n${textContent}` : ''}`
-  });
-
-  const response = await withRetry(async () => {
-    return await ai.models.generateContent({
-      model,
-      contents: { parts },
-      config: {
-        systemInstruction,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            documentType: { type: Type.STRING },
-            targetAudience: { type: Type.STRING },
-            coreSummary: { type: Type.STRING },
-            plainLanguageMeaning: { type: Type.STRING },
-            requiredActions: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING }
-            },
-            importantDatesAndDeadlines: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  event: { type: Type.STRING },
-                  date: { type: Type.STRING },
-                  consequence: { type: Type.STRING }
-                },
-                required: ['event', 'date']
-              }
-            },
-            documentsRequired: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING }
-            },
-            eligibilityConditions: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING }
-            },
-            feesAndCosts: { type: Type.STRING },
-            responsibleDepartment: { type: Type.STRING },
-            consequencesAndPenalties: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING }
-            },
-            citations: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  pageOrSection: { type: Type.STRING },
-                  quotedText: { type: Type.STRING },
-                  simpleInterpretation: { type: Type.STRING }
-                },
-                required: ['pageOrSection', 'simpleInterpretation']
-              }
-            },
-            officialSourceOrVerification: {
-              type: Type.OBJECT,
-              properties: {
-                issuingAuthority: { type: Type.STRING },
-                gazetteOrRefNumber: { type: Type.STRING },
-                verificationLink: { type: Type.STRING },
-                confidence: { type: Type.STRING }
-              },
-              required: ['issuingAuthority', 'confidence']
-            },
-            ocrQuality: { type: Type.STRING },
-            lowConfidenceWarning: { type: Type.STRING }
-          },
-          required: [
-            'documentType', 'targetAudience', 'coreSummary', 'plainLanguageMeaning',
-            'requiredActions', 'importantDatesAndDeadlines', 'documentsRequired',
-            'responsibleDepartment', 'citations', 'officialSourceOrVerification', 'ocrQuality'
-          ]
-        }
-      }
     });
-  });
 
-  return safeParseJson(response.text, {
+    const response = await withRetry(async () => {
+      return await ai.models.generateContent({
+        model,
+        contents: { parts },
+        config: {
+          systemInstruction,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              documentType: { type: Type.STRING },
+              targetAudience: { type: Type.STRING },
+              coreSummary: { type: Type.STRING },
+              plainLanguageMeaning: { type: Type.STRING },
+              requiredActions: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              },
+              importantDatesAndDeadlines: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    event: { type: Type.STRING },
+                    date: { type: Type.STRING },
+                    consequence: { type: Type.STRING }
+                  },
+                  required: ['event', 'date']
+                }
+              },
+              documentsRequired: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              },
+              eligibilityConditions: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              },
+              feesAndCosts: { type: Type.STRING },
+              responsibleDepartment: { type: Type.STRING },
+              consequencesAndPenalties: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              },
+              citations: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    pageOrSection: { type: Type.STRING },
+                    quotedText: { type: Type.STRING },
+                    simpleInterpretation: { type: Type.STRING }
+                  },
+                  required: ['pageOrSection', 'simpleInterpretation']
+                }
+              },
+              officialSourceOrVerification: {
+                type: Type.OBJECT,
+                properties: {
+                  issuingAuthority: { type: Type.STRING },
+                  gazetteOrRefNumber: { type: Type.STRING },
+                  verificationLink: { type: Type.STRING },
+                  confidence: { type: Type.STRING }
+                },
+                required: ['issuingAuthority', 'confidence']
+              },
+              ocrQuality: { type: Type.STRING },
+              lowConfidenceWarning: { type: Type.STRING }
+            },
+            required: [
+              'documentType', 'targetAudience', 'coreSummary', 'plainLanguageMeaning',
+              'requiredActions', 'importantDatesAndDeadlines', 'documentsRequired',
+              'responsibleDepartment', 'citations', 'officialSourceOrVerification', 'ocrQuality'
+            ]
+          }
+        }
+      });
+    });
+    responseText = response.text || null;
+  } catch (err: any) {
+    console.warn('[Document Interpret Notice]:', err?.message || err);
+  }
+
+  return safeParseJson(responseText, {
     documentType: 'Official Government Notice / Order',
     targetAudience: 'Affected Citizens / Property Owners / Applicants',
     coreSummary: 'Official administrative communication requiring specific citizen compliance or conveying entitlements.',

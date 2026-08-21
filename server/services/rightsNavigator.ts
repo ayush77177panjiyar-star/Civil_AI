@@ -37,101 +37,107 @@ ${langInstruction}
 Ensure ALL explanatory text, step-by-step guidance, checklists, summaries, and ladder descriptions are formulated completely in ${langName} (${nativeName}).
 Output structured JSON.`;
 
-  const ai = getGenAI();
-  const model = getGeminiModel();
+  let responseText: string | null = null;
+  try {
+    const ai = getGenAI();
+    const model = getGeminiModel();
 
-  const response = await withRetry(async () => {
-    return await ai.models.generateContent({
-      model,
-      contents: `SELECTED USER RESPONSE LANGUAGE: ${langName} (${nativeName}) - Code: ${langCode}
+    const response = await withRetry(async () => {
+      return await ai.models.generateContent({
+        model,
+        contents: `SELECTED USER RESPONSE LANGUAGE: ${langName} (${nativeName}) - Code: ${langCode}
 Citizen Grievance Description: "${userProblem}". Context: "${contextDetails}"
 
 MANDATORY INSTRUCTION: Generate the complete analysis and all text fields in ${langName} (${nativeName}) because the citizen selected ${langName}.`,
-      config: {
-        systemInstruction,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            problemCategory: { type: Type.STRING },
-            plainLanguageSummary: { type: Type.STRING },
-            verifiedFacts: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING }
-            },
-            possibleInterpretations: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING }
-            },
-            relevantActsAndRules: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  actName: { type: Type.STRING },
-                  sectionOrRule: { type: Type.STRING },
-                  simpleExplanation: { type: Type.STRING },
-                  officialSource: { type: Type.STRING }
-                },
-                required: ['actName', 'simpleExplanation', 'officialSource']
-              }
-            },
-            recommendedNextSteps: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING }
-            },
-            evidenceChecklist: {
-              type: Type.ARRAY,
-              items: {
+        config: {
+          systemInstruction,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              problemCategory: { type: Type.STRING },
+              plainLanguageSummary: { type: Type.STRING },
+              verifiedFacts: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              },
+              possibleInterpretations: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              },
+              relevantActsAndRules: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    actName: { type: Type.STRING },
+                    sectionOrRule: { type: Type.STRING },
+                    simpleExplanation: { type: Type.STRING },
+                    officialSource: { type: Type.STRING }
+                  },
+                  required: ['actName', 'simpleExplanation', 'officialSource']
+                }
+              },
+              recommendedNextSteps: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              },
+              evidenceChecklist: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    importance: { type: Type.STRING },
+                    purpose: { type: Type.STRING },
+                    tip: { type: Type.STRING }
+                  },
+                  required: ['name', 'importance', 'purpose']
+                }
+              },
+              escalationLadder: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    level: { type: Type.INTEGER },
+                    stageName: { type: Type.STRING },
+                    authority: { type: Type.STRING },
+                    timeframe: { type: Type.STRING },
+                    procedure: { type: Type.STRING },
+                    officialLink: { type: Type.STRING }
+                  },
+                  required: ['level', 'stageName', 'authority', 'timeframe', 'procedure']
+                }
+              },
+              responsibleAuthority: {
                 type: Type.OBJECT,
                 properties: {
                   name: { type: Type.STRING },
-                  importance: { type: Type.STRING },
-                  purpose: { type: Type.STRING },
-                  tip: { type: Type.STRING }
+                  jurisdiction: { type: Type.STRING },
+                  contactOrPortal: { type: Type.STRING },
+                  portalUrl: { type: Type.STRING }
                 },
-                required: ['name', 'importance', 'purpose']
-              }
-            },
-            escalationLadder: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  level: { type: Type.INTEGER },
-                  stageName: { type: Type.STRING },
-                  authority: { type: Type.STRING },
-                  timeframe: { type: Type.STRING },
-                  procedure: { type: Type.STRING },
-                  officialLink: { type: Type.STRING }
-                },
-                required: ['level', 'stageName', 'authority', 'timeframe', 'procedure']
-              }
-            },
-            responsibleAuthority: {
-              type: Type.OBJECT,
-              properties: {
-                name: { type: Type.STRING },
-                jurisdiction: { type: Type.STRING },
-                contactOrPortal: { type: Type.STRING },
-                portalUrl: { type: Type.STRING }
+                required: ['name', 'jurisdiction', 'contactOrPortal']
               },
-              required: ['name', 'jurisdiction', 'contactOrPortal']
+              confidence: { type: Type.STRING },
+              disclaimer: { type: Type.STRING }
             },
-            confidence: { type: Type.STRING },
-            disclaimer: { type: Type.STRING }
-          },
-          required: [
-            'problemCategory', 'plainLanguageSummary', 'verifiedFacts', 
-            'possibleInterpretations', 'relevantActsAndRules', 'recommendedNextSteps', 
-            'evidenceChecklist', 'escalationLadder', 'responsibleAuthority', 'confidence', 'disclaimer'
-          ]
+            required: [
+              'problemCategory', 'plainLanguageSummary', 'verifiedFacts', 
+              'possibleInterpretations', 'relevantActsAndRules', 'recommendedNextSteps', 
+              'evidenceChecklist', 'escalationLadder', 'responsibleAuthority', 'confidence', 'disclaimer'
+            ]
+          }
         }
-      }
+      });
     });
-  });
+    responseText = response.text || null;
+  } catch (err: any) {
+    console.warn('[Rights Navigator Notice]:', err?.message || err);
+  }
 
-  const parsed = safeParseJson(response.text, {
+  const parsed = safeParseJson(responseText, {
     problemCategory: 'Civic Grievance & Legal Redressal',
     plainLanguageSummary: `Statutory analysis of your issue regarding: ${userProblem}`,
     verifiedFacts: [
