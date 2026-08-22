@@ -1,4 +1,4 @@
-﻿export type Language = 
+export type Language = 
   | 'en' // English
   | 'hi' // à¤¹à¤¿à¤¨à¥à¤¦à¥€ (Hindi)
   | 'bn' // à¦¬à¦¾à¦‚à¦²à¦¾ (Bengali)
@@ -179,12 +179,20 @@ export interface RightsAnalysisResult {
 // Scheme Eligibility Types
 export interface CitizenProfile {
   age?: number | string;
+  gender?: string;
   stateOrUt?: string;
+  district?: string;
   annualIncome?: number | string;
   occupation?: string;
-  category?: string;
-  gender?: string;
   education?: string;
+  category?: string;
+  isDisability?: boolean | string;
+  isFarmer?: boolean | string;
+  locationType?: 'All' | 'Rural' | 'Urban' | string;
+  maritalStatus?: string;
+  isMinority?: boolean | string;
+  housingStatus?: string;
+  isMsme?: boolean | string;
   isStudent?: boolean;
 }
 
@@ -192,15 +200,36 @@ export interface SchemeItem {
   id: string;
   name: string;
   nameHi?: string;
-  ministryOrDepartment: string;
   governmentLevel: 'Central' | 'State' | 'Local';
+  stateOrUT: string;
   stateOrUt?: string;
-  category: 'Education' | 'Agriculture' | 'Housing' | 'Healthcare' | 'Social Welfare' | 'Employment' | 'Women & Child' | 'Business & MSME' | string;
-  targetAudience: string[];
-  benefitsSummary: string;
+  ministryOrDepartment: string;
+  category: 'Education' | 'Agriculture' | 'Housing' | 'Healthcare' | 'Social Welfare' | 'Employment' | 'Women & Child' | 'Business & MSME' | 'Pension' | 'Insurance' | 'Skill Development' | 'Financial Inclusion' | 'Energy' | 'Disability' | string;
+  subCategory?: string;
+  description: string;
+  benefits: string;
+  eligibility: string;
+  exclusions?: string;
+  ageCriteria: { min: number | null; max: number | null };
+  genderCriteria: 'All' | 'Male' | 'Female' | 'Transgender' | string;
+  incomeCriteria: { maxAnnualIncome: number | null };
+  casteCategory: string[];
+  occupationCriteria: string[];
+  educationCriteria?: string;
+  locationCriteria: 'All' | 'Rural' | 'Urban' | string;
+  requiredDocuments: string[];
+  applicationProcess: string;
+  applicationUrl: string;
+  officialSourceUrl: string;
+  lastVerified: string;
+  status: 'ACTIVE' | 'VERIFY';
+
+  // Backward compatibility fields
+  targetAudience?: string[];
+  benefitsSummary?: string;
   financialBenefit?: string;
   inKindBenefit?: string;
-  eligibilityCriteria: {
+  eligibilityCriteria?: {
     ageMin?: number;
     ageMax?: number;
     maxAnnualIncome?: number;
@@ -210,18 +239,18 @@ export interface SchemeItem {
     specialConditions?: string[];
     location?: string;
   };
-  documentsRequired: string[];
-  applicationMode: 'Online' | 'Offline' | 'Both';
-  applicationSteps: string[];
-  officialPortalUrl: string;
-  mySchemeUrl: string;
-  sourceAuthority: string;
-  lastVerifiedDate: string;
+  documentsRequired?: string[];
+  applicationMode?: 'Online' | 'Offline' | 'Both' | string;
+  applicationSteps?: string[];
+  officialPortalUrl?: string;
+  mySchemeUrl?: string;
+  sourceAuthority?: string;
+  lastVerifiedDate?: string;
 }
 
 export interface SchemeMatchResult {
   scheme: SchemeItem;
-  matchStatus: 'Potentially Eligible' | 'Appears to Meet Criteria' | 'Needs Verification';
+  matchStatus: 'Eligible' | 'Appears to Meet Criteria' | 'Potentially Eligible' | 'Needs Verification' | 'Not Eligible';
   matchConfidence: ConfidenceLevel;
   reasonsForMatch: string[];
   potentialBlockersOrVerifications: string[];
